@@ -6,7 +6,7 @@ from .ml.eta_model import eta_model
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import get_settings
-from .routers import aggregator, cases, checks, orders, workflow, demo
+from .routers import aggregator, cases, checks, orders, workflow, demo, ops_map
 
 settings = get_settings()
 
@@ -41,6 +41,7 @@ app.include_router(aggregator.router)
 app.include_router(orders.router)
 app.include_router(workflow.router)
 app.include_router(demo.router)
+app.include_router(ops_map.router)
 
 
 @app.get("/health")
