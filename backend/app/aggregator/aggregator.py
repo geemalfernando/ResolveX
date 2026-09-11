@@ -88,7 +88,8 @@ def _local_decision_engine(payload: AggregatorInput) -> dict:
     if high_claim_risk and not corroborating:
         return {
             "claim_valid": False,
-            "fault_party": "customer_abuse",
+            "fault_party": FaultParty.neither.value,
+            "cause_category": "CUSTOMER_ABUSE",
             "confidence": 0.71,
             "outcome": Outcome.support_ticket.value,
             "reasons": [
@@ -232,7 +233,7 @@ def _is_fault_disputed(payload: AggregatorInput, verdict_dict: dict) -> bool:
 
     photo_flagged = by_name.get(CheckName.photo) and by_name[CheckName.photo].flagged
     claim_history_flagged = by_name.get(CheckName.claim_history) and by_name[CheckName.claim_history].flagged
-    if photo_flagged and claim_history_flagged and verdict_dict.get("fault_party") != "customer_abuse":
+    if photo_flagged and claim_history_flagged and verdict_dict.get("cause_category") != "CUSTOMER_ABUSE":
         return True
 
     return False
@@ -249,7 +250,7 @@ def _apply_outcome_overrides(payload: AggregatorInput, verdict_dict: dict) -> di
     if confidence < settings.aggregator_confidence_threshold or _is_fault_disputed(payload, verdict_dict):
         verdict_dict["outcome"] = Outcome.support_ticket.value
 
-    if verdict_dict.get("fault_party") == "customer_abuse" and confidence < 0.75:
+    if verdict_dict.get("cause_category") == "CUSTOMER_ABUSE" and confidence < 0.75:
         verdict_dict["outcome"] = Outcome.support_ticket.value
 
     return verdict_dict
@@ -301,14 +302,6 @@ def assess_claim(payload):
 
 
 def run_aggregator(payload: AggregatorInput) -> Verdict:
-    inference = fault_model.infer(payload)
-    if inference["model_used"]:
-        prediction = inference["model_prediction"]
-        confidence = max(inference["class_probabilities"].values())
-    else:
-        prediction, confidence = _rule_fallback(payload)
-    public_party = "NEITHER" if prediction == "EXTERNAL" else prediction
-    claim = assess_claim(payload)
     settings = get_settings()
     checks = {c.check_name: c for c in payload.check_results}
     zone = checks.get(CheckName.zone)

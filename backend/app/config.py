@@ -34,6 +34,13 @@ class Settings(BaseSettings):
     fault_model_path: str = str(Path(__file__).parent / "ml" / "fault_model.joblib")
     auto_action_confidence_threshold: float = 0.80
 
+    # Confidence bar for auto-resolving when the trained fault model isn't loaded and the
+    # rule-based fallback is deciding instead. Lower than auto_action_confidence_threshold
+    # because the fallback's confidence numbers are hand-picked heuristics, not a calibrated
+    # model's probabilities — e.g. it clears for an unambiguous zone-wide delay (0.8) but not
+    # for a single-signal merchant/rider guess (0.55).
+    rule_fallback_confidence_threshold: float = 0.75
+
     support_review_confidence_threshold: float = 0.55
 
     # Legacy aggregator setting retained for compatibility
