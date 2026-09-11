@@ -59,7 +59,14 @@ def close_tickets(case, notes):
 def refund(case):
     if case.workflow.get("refund", {}).get("status") == "completed":
         return case.workflow["refund"]
-    refund_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"resolvex/refund/{case.case_id}"))
+    refund_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"resolvex/refund/order/{case.order.id}"))
+    existing = [r for r in rows("refund_history", order_id=case.order.id) if r["outcome"] == "approved"]
+    if existing:
+        saved = existing[0]
+        record = dict(reference="RFD-" + saved["id"][:8].upper(), amount=float(saved["amount"]), currency="LKR", status="completed", processed_at=saved.get("created_at"), mocked=True)
+        case.workflow["refund"] = record
+        event(case, "Existing order refund reused; no second refund issued")
+        return record
     amount = round(sum(item.qty * item.price for item in case.order.items), 2)
     record = dict(reference="RFD-" + refund_id[:8].upper(), amount=amount, currency="LKR", status="completed", processed_at=now(), mocked=True)
     reason = case.complaint.type.value if case.complaint and case.complaint.type.value in ("late", "wrong_item", "damaged", "missing_item") else "other"
@@ -97,6 +104,19 @@ def broadcast(case):
 
 def persist_analysis(case, results, verdict):
     sb = get_supabase()
+    history = next((r for r in results if r.check_name.value == "claim_history"), None)
+    risk = float(history.details.get("risk_score", 0)) if history else None
+    review_required = history is None or history.flagged or (risk is not None and risk >= 0.5) or bool(case.workflow.get("account_manual_review"))
+    case.workflow["fraud_screening"] = dict(
+        status="review_required" if review_required else "low_risk",
+        risk_score=risk, source=history.details.get("source", "unknown") if history else "unavailable",
+        signals=history.details.get("risk_flags", []) if history else [],
+        claims_last_90_days=history.details.get("claims_last_90_days", 0) if history else None,
+        checked_at=now(), summary=history.summary if history else "Claim history unavailable; review required.",
+    )
+    if review_required and verdict.outcome == Outcome.auto_refund:
+        verdict = verdict.model_copy(update={"outcome": Outcome.support_ticket, "resolution": Outcome.support_ticket})
+    event(case, "Claim-history screening: review required" if review_required else "Claim-history screening: low risk")
     # The full verdict in case JSON is canonical, including NO_ACTION, which the
     # legacy verdicts.outcome check cannot represent. Other outcomes are mirrored.
     case.workflow.pop("resolution_action", None)

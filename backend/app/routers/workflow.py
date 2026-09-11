@@ -263,6 +263,10 @@ def admin(principal: AuthPrincipal = Depends(require_roles("admin"))):
             ident = c["case_payload"][party]["id"]
             repeat[party][ident] = repeat[party].get(ident, 0) + 1
     return dict(
+        refunds=[dict(case_id=c["id"], order_id=c["order_id"], customer=c["case_payload"]["customer"]["name"], **c["case_payload"]["workflow"]["refund"])
+                 for c in cases if c["case_payload"].get("workflow", {}).get("refund")],
+        fraud_reviews=[dict(case_id=c["id"], customer=c["case_payload"]["customer"]["name"], **c["case_payload"]["workflow"]["fraud_screening"])
+                       for c in cases if c["status"] != "resolved" and c["case_payload"].get("workflow", {}).get("fraud_screening", {}).get("status") == "review_required"],
         accounts=accounts,
         reviewed_cases=len(reviewed),
         overrides=overrides,

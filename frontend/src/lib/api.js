@@ -20,10 +20,14 @@ export async function api(path, body, options = {}) {
 
   if (response.status === 401) {
     await supabase.auth.signOut();
-    throw new Error('Your session expired. Please sign in again.');
+    const error = new Error('Your session expired. Please sign in again.');
+    error.status = 401;
+    throw error;
   }
   if (!response.ok) {
-    throw new Error(typeof value.detail === 'string' ? value.detail : `Request failed (${response.status})`);
+    const error = new Error(typeof value.detail === 'string' ? value.detail : `Request failed (${response.status})`);
+    error.status = response.status;
+    throw error;
   }
   return value;
 }

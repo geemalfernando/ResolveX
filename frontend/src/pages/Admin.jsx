@@ -13,7 +13,9 @@ export default function Admin() {
 
   useEffect(() => {
     load();
+    const timer = setInterval(load, 15000);
     api("/api/model/status").then(setModels).catch((e) => setError(e.message));
+    return () => clearInterval(timer);
   }, []);
 
   async function flag(id, manual_review) {
@@ -53,6 +55,22 @@ export default function Admin() {
           </div>
         ))}
       </div>
+
+      <section className="rounded-xl border bg-white p-5 space-y-4">
+        <h2 className="font-semibold">Automated refunds & fraud screening</h2>
+        <p className="text-sm text-slate-500">Eligible claims receive demo refunds automatically. Unusual claim history pauses automatic refunds for support review; it does not prove fraud.</p>
+        <div className="grid sm:grid-cols-2 gap-4">
+          <div className="rounded-lg bg-emerald-50 p-4"><b>{new Set((data?.refunds ?? []).map(r => r.reference)).size} refunds completed</b><p className="text-xs">Simulated payments · no money transferred</p></div>
+          <div className="rounded-lg bg-amber-50 p-4"><b>{data?.fraud_reviews?.length ?? 0} claims need risk review</b><p className="text-xs">Screened automatically on every analysis</p></div>
+        </div>
+        <h3 className="font-medium">Refund activity</h3>
+        <div className="overflow-auto"><table className="w-full text-sm text-left"><thead><tr>{['Customer', 'Reference', 'Amount', 'Status'].map(h => <th className="p-2" key={h}>{h}</th>)}</tr></thead><tbody>
+          {(data?.refunds ?? []).map(r => <tr className="border-t" key={r.case_id}><td className="p-2">{r.customer}</td><td>{r.reference}</td><td>{r.currency} {Number(r.amount).toLocaleString()}</td><td>{r.status}</td></tr>)}
+        </tbody></table>{!data?.refunds?.length && <p className="text-sm text-slate-500">No refunds completed yet.</p>}</div>
+        <h3 className="font-medium">Suspected claim abuse — needs review</h3>
+        {(data?.fraud_reviews ?? []).map(r => <div key={r.case_id} className="rounded border border-amber-200 p-3 text-sm"><b>{r.customer}</b><p>{r.summary}</p><p className="text-xs text-slate-500">{r.claims_last_90_days ?? 'Unknown'} prior claims · {r.source === 'rules' ? 'Rule-based screening' : r.source} · Support review required</p></div>)}
+        {!data?.fraud_reviews?.length && <p className="text-sm text-slate-500">No claims currently flagged for risk review.</p>}
+      </section>
 
       <section className="rounded-xl border bg-white p-5 overflow-auto">
         <div className="flex flex-wrap items-center justify-between gap-2 mb-3">

@@ -7,6 +7,8 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 
+from pydantic import TypeAdapter
+
 from .db import get_supabase
 from .models import (
     Case,
@@ -25,6 +27,9 @@ from .models import (
 )
 
 
+_timestamp = TypeAdapter(datetime)
+
+
 def _zone_snapshot(zone_id: str) -> ZoneSnapshot:
     sb = get_supabase()
     open_orders = (
@@ -38,7 +43,7 @@ def _zone_snapshot(zone_id: str) -> ZoneSnapshot:
     open_count = len(rows)
     late_count = sum(1 for r in rows if r.get("is_late_flagged"))
     now = datetime.now(timezone.utc)
-    delays = [max(0, (now - datetime.fromisoformat(r["placed_at"].replace("Z", "+00:00"))).total_seconds() / 60 - r["promised_delivery_minutes"])
+    delays = [max(0, (now - _timestamp.validate_python(r["placed_at"])).total_seconds() / 60 - r["promised_delivery_minutes"])
               for r in rows if r.get("placed_at") and r.get("promised_delivery_minutes") is not None]
     return ZoneSnapshot(zone_id=zone_id, open_orders_count=open_count, late_orders_count=late_count,
                         average_delay_minutes=round(sum(delays) / len(delays), 2) if delays else None)
