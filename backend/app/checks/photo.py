@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+from concurrent.futures import ThreadPoolExecutor, TimeoutError
 
 import httpx
 from google import genai
@@ -17,6 +18,8 @@ from ..config import get_settings
 from ..models import Case, CheckName, CheckResult
 
 logger = logging.getLogger(__name__)
+_gemini_quota_exhausted = False
+PHOTO_ANALYSIS_TIMEOUT_SECONDS = 5
 
 PHOTO_PROMPT_TEMPLATE = """You are inspecting a photo a customer submitted with a food delivery complaint.
 
@@ -37,10 +40,10 @@ Respond ONLY with JSON matching this shape, no markdown fences, no commentary:
 """
 
 _STUB_RESULT = {
-    "match": True,
+    "match": None,
     "detected_items": [],
     "damage_detected": False,
-    "model_notes": "STUB RESPONSE: GEMINI_API_KEY not set (see checks/photo.py).",
+    "model_notes": "Photo AI unavailable; treated as inconclusive and routed for review.",
 }
 
 
@@ -52,8 +55,10 @@ def _fetch_image_bytes(photo_url: str) -> tuple[bytes, str]:
 
 
 def _call_gemini(photo_url: str, prompt: str) -> dict:
+    global _gemini_quota_exhausted
+
     settings = get_settings()
-    if not settings.gemini_api_key:
+    if not settings.gemini_api_key or _gemini_quota_exhausted:
         return _STUB_RESULT
 
     try:
@@ -69,14 +74,35 @@ def _call_gemini(photo_url: str, prompt: str) -> dict:
             config=types.GenerateContentConfig(response_mime_type="application/json"),
         )
         return json.loads(response.text)
-    except Exception:
-        logger.exception("PHOTO check Gemini call failed; falling back to inconclusive result")
+    except Exception as exc:
+        if "429" in str(exc) or "RESOURCE_EXHAUSTED" in str(exc):
+            _gemini_quota_exhausted = True
+            logger.warning("PHOTO Gemini quota exhausted; disabling photo AI for this process")
+        else:
+            logger.warning("PHOTO check Gemini call failed; falling back to inconclusive result: %s", exc)
         return {
             "match": None,
             "detected_items": [],
             "damage_detected": False,
             "model_notes": "Gemini call failed — treated as inconclusive, needs human review.",
         }
+
+
+def _call_gemini_with_timeout(photo_url: str, prompt: str) -> dict:
+    executor = ThreadPoolExecutor(max_workers=1)
+    future = executor.submit(_call_gemini, photo_url, prompt)
+    try:
+        return future.result(timeout=PHOTO_ANALYSIS_TIMEOUT_SECONDS)
+    except TimeoutError:
+        logger.warning("PHOTO analysis timed out; continuing with human-review fallback")
+        return {
+            "match": None,
+            "detected_items": [],
+            "damage_detected": False,
+            "model_notes": "Photo analysis timed out — needs human review.",
+        }
+    finally:
+        executor.shutdown(wait=False, cancel_futures=True)
 
 
 def run(case: Case) -> CheckResult:
@@ -92,7 +118,7 @@ def run(case: Case) -> CheckResult:
     expected_items = [item.name for item in case.order.items]
     prompt = PHOTO_PROMPT_TEMPLATE.format(items="\n".join(f"- {name}" for name in expected_items))
 
-    result = _call_gemini(case.complaint.photo_url, prompt)
+    result = _call_gemini_with_timeout(case.complaint.photo_url, prompt)
 
     mismatch = result.get("match") is False
     damaged = bool(result.get("damage_detected"))

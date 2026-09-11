@@ -1,0 +1,188 @@
+{
+  "model_name": "fault_classifier",
+  "model_version": "2.0-synthetic",
+  "label_provenance": "Synthetic/pseudo-labelled incident scenarios derived from public/synthetic delivery datasets; not genuine historical fault determinations.",
+  "trained_at": "2026-09-11T19:38:45.634961+00:00",
+  "sklearn_version": "1.5.2",
+  "features": [
+    "prep_delay_min",
+    "pickup_delay_min",
+    "travel_delay_min",
+    "route_deviation_km",
+    "stationary_time_min",
+    "zone_late_percentage",
+    "zone_average_delay_min"
+  ],
+  "classes": [
+    "EXTERNAL",
+    "MERCHANT",
+    "NEITHER",
+    "RIDER"
+  ],
+  "train_rows": 24000,
+  "test_rows": 24000,
+  "source_counts": {
+    "kaggle_synthetic": 24000,
+    "zomato": 24000
+  },
+  "sources": {
+    "zomato": {
+      "rows": 45584,
+      "columns": [
+        "ID",
+        "Delivery_person_ID",
+        "Delivery_person_Age",
+        "Delivery_person_Ratings",
+        "Restaurant_latitude",
+        "Restaurant_longitude",
+        "Delivery_location_latitude",
+        "Delivery_location_longitude",
+        "Order_Date",
+        "Time_Orderd",
+        "Time_Order_picked",
+        "Weather_conditions",
+        "Road_traffic_density",
+        "Vehicle_condition",
+        "Type_of_order",
+        "Type_of_vehicle",
+        "multiple_deliveries",
+        "Festival",
+        "City",
+        "Time_taken (min)"
+      ],
+      "target": "Time_taken (min)",
+      "url": "https://github.com/Parth-Malik/Zomato-Delivery-Time-Prediction",
+      "sha256": "e33e182ebb9c1d7e0f54c83c0cef6ddc5aa98d203e8888d33ab68cca3a079cba"
+    },
+    "kaggle_synthetic": {
+      "rows": 50000,
+      "columns": [
+        "Order_ID",
+        "Order_Date",
+        "Order_Hour",
+        "Day_of_Week",
+        "Is_Weekend",
+        "Is_Festival",
+        "Weather",
+        "Pickup_Zone",
+        "Dropoff_Zone",
+        "Vehicle_Type",
+        "Rider_Experience_Years",
+        "Rider_Rating",
+        "Restaurant_Rating",
+        "Cuisine_Type",
+        "Order_Items",
+        "Restaurant_Load",
+        "Preparation_Time_Min",
+        "Road_Distance_km",
+        "Delivery_Distance_Category",
+        "Traffic_Level",
+        "Number_of_Signals",
+        "Average_Speed_kmph",
+        "Delivery_Priority",
+        "Time_taken_min"
+      ],
+      "target": "Time_taken_min",
+      "url": "https://www.kaggle.com/datasets/dharmendrapandit12/food-delivery-time-prediction-dataset",
+      "sha256": "68443b9c6dde85760f57233c5da9b71298b8760e558d63357f4cfb909e872f35"
+    },
+    "normalization": {
+      "distance": "Zomato straight-line vs Kaggle road distance: retained as imperfect proxies; basis recorded; metrics reported by source.",
+      "preparation": "Zomato order-to-pickup proxy vs Kaggle prep duration; prep_basis recorded.",
+      "split": "80/20 stratified by source, seed 17, before fitting or incident augmentation",
+      "retained_rows": {
+        "kaggle_synthetic": 50000,
+        "zomato": 45584
+      },
+      "eta_features": [
+        "distance_km",
+        "prep_time_min",
+        "order_hour",
+        "is_weekend",
+        "weather",
+        "traffic",
+        "vehicle"
+      ]
+    }
+  },
+  "scenario_generation": {
+    "seed": 23,
+    "label_noise": 0.07,
+    "mixed_evidence_rate": 0.15,
+    "missing_observation_rate": 0.08,
+    "split": "Source rows split before augmentation; all variants of a source row stay together"
+  },
+  "train_accuracy": 0.9144166666666667,
+  "test_accuracy": 0.90975,
+  "test_log_loss": 0.38331824658311425,
+  "classification_report": {
+    "EXTERNAL": {
+      "precision": 0.9291666666666667,
+      "recall": 0.925464807436919,
+      "f1-score": 0.9273120425815037,
+      "support": 6024.0
+    },
+    "MERCHANT": {
+      "precision": 0.8962739174219537,
+      "recall": 0.8877805486284289,
+      "f1-score": 0.8920070157855174,
+      "support": 6015.0
+    },
+    "NEITHER": {
+      "precision": 0.8889440582588547,
+      "recall": 0.8959132610508758,
+      "f1-score": 0.8924150535847802,
+      "support": 5995.0
+    },
+    "RIDER": {
+      "precision": 0.9246666666666666,
+      "recall": 0.9299363057324841,
+      "f1-score": 0.9272939996657196,
+      "support": 5966.0
+    },
+    "accuracy": 0.90975,
+    "macro avg": {
+      "precision": 0.9097628272535354,
+      "recall": 0.9097737307121769,
+      "f1-score": 0.9097570279043803,
+      "support": 24000.0
+    },
+    "weighted avg": {
+      "precision": 0.9097570239953425,
+      "recall": 0.90975,
+      "f1-score": 0.9097422580294711,
+      "support": 24000.0
+    }
+  },
+  "confusion_matrix": [
+    [
+      5575,
+      142,
+      157,
+      150
+    ],
+    [
+      144,
+      5340,
+      378,
+      153
+    ],
+    [
+      137,
+      338,
+      5371,
+      149
+    ],
+    [
+      144,
+      138,
+      136,
+      5548
+    ]
+  ],
+  "test_accuracy_by_source": {
+    "kaggle_synthetic": 0.91075,
+    "zomato": 0.90875
+  },
+  "limitations": "Measures reproduction of simulated scenarios, not real-world fault accuracy. Probabilities are not calibrated on adjudicated incidents. Refund history and photo do not determine fault classes."
+}

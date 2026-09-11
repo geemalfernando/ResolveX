@@ -21,6 +21,7 @@ def run(case: Case) -> CheckResult:
     )
     threshold = settings.zone_late_ratio_threshold
     zone_wide_delay = late_ratio >= threshold
+    traffic_level = "Jam" if late_ratio >= 0.6 else "High" if late_ratio >= 0.3 else "Medium" if late_ratio > 0 else "Low"
 
     confidence = min(0.5 + late_ratio, 0.95) if zone_wide_delay else 0.85
 
@@ -44,8 +45,10 @@ def run(case: Case) -> CheckResult:
             "zone_id": snapshot.zone_id,
             "open_orders_count": snapshot.open_orders_count,
             "late_orders_count": snapshot.late_orders_count,
+            "average_delay_minutes": snapshot.average_delay_minutes,
             "late_ratio": round(late_ratio, 3),
             "threshold": threshold,
             "zone_wide_delay": zone_wide_delay,
+            "traffic_level": traffic_level,
         },
     )

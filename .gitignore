@@ -27,3 +27,8 @@ backend/app/ml/eta_model.joblib
 .idea/
 .DS_Store
 Thumbs.db
+
+# Reproducible local training data and binary artifacts
+data/external/**/*.csv
+data/processed/*.csv
+backend/app/ml/fault_model.joblib

@@ -1,0 +1,80 @@
+{
+  "zomato": {
+    "rows": 45584,
+    "columns": [
+      "ID",
+      "Delivery_person_ID",
+      "Delivery_person_Age",
+      "Delivery_person_Ratings",
+      "Restaurant_latitude",
+      "Restaurant_longitude",
+      "Delivery_location_latitude",
+      "Delivery_location_longitude",
+      "Order_Date",
+      "Time_Orderd",
+      "Time_Order_picked",
+      "Weather_conditions",
+      "Road_traffic_density",
+      "Vehicle_condition",
+      "Type_of_order",
+      "Type_of_vehicle",
+      "multiple_deliveries",
+      "Festival",
+      "City",
+      "Time_taken (min)"
+    ],
+    "target": "Time_taken (min)",
+    "url": "https://github.com/Parth-Malik/Zomato-Delivery-Time-Prediction",
+    "sha256": "e33e182ebb9c1d7e0f54c83c0cef6ddc5aa98d203e8888d33ab68cca3a079cba"
+  },
+  "kaggle_synthetic": {
+    "rows": 50000,
+    "columns": [
+      "Order_ID",
+      "Order_Date",
+      "Order_Hour",
+      "Day_of_Week",
+      "Is_Weekend",
+      "Is_Festival",
+      "Weather",
+      "Pickup_Zone",
+      "Dropoff_Zone",
+      "Vehicle_Type",
+      "Rider_Experience_Years",
+      "Rider_Rating",
+      "Restaurant_Rating",
+      "Cuisine_Type",
+      "Order_Items",
+      "Restaurant_Load",
+      "Preparation_Time_Min",
+      "Road_Distance_km",
+      "Delivery_Distance_Category",
+      "Traffic_Level",
+      "Number_of_Signals",
+      "Average_Speed_kmph",
+      "Delivery_Priority",
+      "Time_taken_min"
+    ],
+    "target": "Time_taken_min",
+    "url": "https://www.kaggle.com/datasets/dharmendrapandit12/food-delivery-time-prediction-dataset",
+    "sha256": "68443b9c6dde85760f57233c5da9b71298b8760e558d63357f4cfb909e872f35"
+  },
+  "normalization": {
+    "distance": "Zomato straight-line vs Kaggle road distance: retained as imperfect proxies; basis recorded; metrics reported by source.",
+    "preparation": "Zomato order-to-pickup proxy vs Kaggle prep duration; prep_basis recorded.",
+    "split": "80/20 stratified by source, seed 17, before fitting or incident augmentation",
+    "retained_rows": {
+      "kaggle_synthetic": 50000,
+      "zomato": 45584
+    },
+    "eta_features": [
+      "distance_km",
+      "prep_time_min",
+      "order_hour",
+      "is_weekend",
+      "weather",
+      "traffic",
+      "vehicle"
+    ]
+  }
+}

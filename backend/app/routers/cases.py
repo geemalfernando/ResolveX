@@ -6,7 +6,10 @@ GET /cases/{id} — fetch a previously built case with its checks and verdict.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+import uuid
+
+from fastapi import APIRouter, File, HTTPException, UploadFile
+from postgrest.exceptions import APIError
 
 from .. import checks
 from ..aggregator.aggregator import run_aggregator
@@ -20,6 +23,32 @@ from ..models import (
 )
 
 router = APIRouter(prefix="/cases", tags=["cases"])
+
+
+@router.post("/upload-photo")
+def upload_photo(file: UploadFile = File(...)) -> dict[str, str]:
+    allowed_types = {"image/jpeg", "image/png", "image/webp"}
+    if file.content_type not in allowed_types:
+        raise HTTPException(status_code=400, detail="Only JPEG, PNG, and WebP images are supported")
+
+    contents = file.file.read()
+    if len(contents) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Photo must be 10 MB or smaller")
+
+    extension = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}[file.content_type]
+    path = f"{uuid.uuid4()}.{extension}"
+    try:
+        sb = get_supabase()
+        sb.storage.from_("complaint-photos").upload(
+            path,
+            contents,
+            {"content-type": file.content_type, "upsert": "false"},
+        )
+        public_url = sb.storage.from_("complaint-photos").get_public_url(path)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Photo upload failed: {exc}") from exc
+
+    return {"photo_url": public_url}
 
 
 @router.post("", response_model=CaseResponse)
@@ -61,7 +90,7 @@ def create_case(body: CreateCaseRequest) -> CaseResponse:
                 "complaint_id": case.complaint.id if case.complaint else None,
                 "trigger": case.trigger.value,
                 "case_payload": case.model_dump(mode="json"),
-                "status": "aggregated",
+                "status": "open",
             }
         )
         .execute()
@@ -79,20 +108,30 @@ def create_case(body: CreateCaseRequest) -> CaseResponse:
         ]
     ).execute()
 
-    sb.table("verdicts").insert(
-        {
-            "case_id": case.case_id,
-            "claim_valid": verdict.claim_valid,
-            "fault_party": verdict.fault_party.value,
-            "confidence": verdict.confidence,
-            "outcome": verdict.outcome.value,
-            "reasons": [r.model_dump(mode="json") for r in verdict.reasons],
-            "raw_llm_response": verdict.model_dump(mode="json"),
-        }
-    ).execute()
+    try:
+        sb.table("verdicts").insert(
+            {
+                "case_id": case.case_id,
+                "claim_valid": verdict.claim_valid,
+                "fault_party": verdict.fault_party.value,
+                "confidence": verdict.confidence,
+                "outcome": verdict.outcome.value,
+                "reasons": [r.model_dump(mode="json") for r in verdict.reasons],
+                "raw_llm_response": verdict.model_dump(mode="json"),
+            }
+        ).execute()
+    except APIError as exc:
+        migration_needed = exc.code == "23514" and "verdicts_fault_party_check" in exc.message
+        detail = (
+            "Fault analysis completed, but its verdict could not be saved. Apply the EXTERNAL fault constraint migration."
+            if migration_needed else "Fault analysis completed, but its verdict could not be saved."
+        )
+        raise HTTPException(status_code=503, detail=detail, headers={"X-Case-ID": case.case_id}) from exc
 
     if verdict.outcome == Outcome.support_ticket:
         sb.table("support_tickets").insert({"case_id": case.case_id, "status": "open"}).execute()
+
+    sb.table("cases").update({"status": "aggregated"}).eq("id", case.case_id).execute()
 
     del case_row  # response id already known; row insert result unused beyond error surfacing
 
@@ -114,7 +153,12 @@ def get_case(case_id: str) -> CaseResponse:
         raise HTTPException(status_code=404, detail=f"Case {case_id} not found")
 
     check_rows = sb.table("check_results").select("*").eq("case_id", case_id).execute().data or []
-    verdict_row = sb.table("verdicts").select("*").eq("case_id", case_id).single().execute().data
+    try:
+        verdict_row = sb.table("verdicts").select("*").eq("case_id", case_id).single().execute().data
+    except APIError as exc:
+        if exc.code != "PGRST116":
+            raise
+        verdict_row = None  # Unique case_id means this is a pending/failed save, not duplicates.
 
     from ..models import Case, CheckResult, FaultParty, Verdict, VerdictReason
 
@@ -123,6 +167,8 @@ def get_case(case_id: str) -> CaseResponse:
     verdict = None
     if verdict_row:
         verdict = Verdict(
+            **{k: v for k, v in (verdict_row.get("raw_llm_response") or {}).items()
+               if k in Verdict.model_fields and k not in {"claim_valid", "fault_party", "confidence", "outcome", "reasons"}},
             claim_valid=verdict_row["claim_valid"],
             fault_party=FaultParty(verdict_row["fault_party"]),
             confidence=verdict_row["confidence"],

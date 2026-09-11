@@ -1,0 +1,294 @@
+[
+  {
+    "case": "MERCHANT",
+    "verdict": {
+      "claim_valid": true,
+      "fault_party": "merchant",
+      "confidence": 0.839986673611115,
+      "outcome": "SUPPORT_TICKET",
+      "reasons": [
+        {
+          "check": "timing",
+          "reason": "Delivery took 70 min vs 30 min promised (+40 min late)."
+        },
+        {
+          "check": "rider_route",
+          "reason": "Rider route looks normal \u2014 no detours or unusual stops."
+        },
+        {
+          "check": "zone",
+          "reason": "Only 0% of open orders are late in zone z; no zone-wide pattern."
+        },
+        {
+          "check": "claim_history",
+          "reason": "Customer has 0 claims in the last 90 days; no unusual pattern."
+        },
+        {
+          "check": "photo",
+          "reason": "No photo submitted with this case."
+        }
+      ],
+      "label_provenance": "Synthetic/pseudo-labelled incident scenarios derived from public/synthetic delivery datasets; not genuine historical fault determinations.",
+      "model_used": true,
+      "model_name": "fault_classifier",
+      "model_version": "2.0-synthetic",
+      "model_prediction": "MERCHANT",
+      "fault_prediction": "MERCHANT",
+      "fault_confidence": 0.839986673611115,
+      "resolution": "SUPPORT_TICKET",
+      "class_probabilities": {
+        "EXTERNAL": 0.029702842524609682,
+        "MERCHANT": 0.839986673611115,
+        "NEITHER": 0.10803261771149542,
+        "RIDER": 0.022277866152779786
+      },
+      "features": {
+        "prep_delay_min": 40.0,
+        "pickup_delay_min": 2.0,
+        "travel_delay_min": 8.8,
+        "route_deviation_km": 0.0,
+        "stationary_time_min": 0.0,
+        "zone_late_percentage": 0.0,
+        "zone_average_delay_min": 0.0
+      },
+      "feature_names": [
+        "prep_delay_min",
+        "pickup_delay_min",
+        "travel_delay_min",
+        "route_deviation_km",
+        "stationary_time_min",
+        "zone_late_percentage",
+        "zone_average_delay_min"
+      ],
+      "feature_vector": [
+        40.0,
+        2.0,
+        8.8,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "fallback_reason": null
+    }
+  },
+  {
+    "case": "RIDER",
+    "verdict": {
+      "claim_valid": true,
+      "fault_party": "rider",
+      "confidence": 0.5695654493742773,
+      "outcome": "SUPPORT_TICKET",
+      "reasons": [
+        {
+          "check": "timing",
+          "reason": "Delivery took 80 min vs 30 min promised (+50 min late)."
+        },
+        {
+          "check": "rider_route",
+          "reason": "Rider route issues detected: long_stationary_stop."
+        },
+        {
+          "check": "zone",
+          "reason": "Only 0% of open orders are late in zone z; no zone-wide pattern."
+        },
+        {
+          "check": "claim_history",
+          "reason": "Customer has 0 claims in the last 90 days; no unusual pattern."
+        },
+        {
+          "check": "photo",
+          "reason": "No photo submitted with this case."
+        }
+      ],
+      "label_provenance": "Synthetic/pseudo-labelled incident scenarios derived from public/synthetic delivery datasets; not genuine historical fault determinations.",
+      "model_used": true,
+      "model_name": "fault_classifier",
+      "model_version": "2.0-synthetic",
+      "model_prediction": "RIDER",
+      "fault_prediction": "RIDER",
+      "fault_confidence": 0.5695654493742773,
+      "resolution": "SUPPORT_TICKET",
+      "class_probabilities": {
+        "EXTERNAL": 0.07295134955965814,
+        "MERCHANT": 0.07793090044807492,
+        "NEITHER": 0.2795523006179897,
+        "RIDER": 0.5695654493742773
+      },
+      "features": {
+        "prep_delay_min": 2.0,
+        "pickup_delay_min": 3.0,
+        "travel_delay_min": 55.8,
+        "route_deviation_km": 0.0,
+        "stationary_time_min": 25.0,
+        "zone_late_percentage": 0.0,
+        "zone_average_delay_min": 0.0
+      },
+      "feature_names": [
+        "prep_delay_min",
+        "pickup_delay_min",
+        "travel_delay_min",
+        "route_deviation_km",
+        "stationary_time_min",
+        "zone_late_percentage",
+        "zone_average_delay_min"
+      ],
+      "feature_vector": [
+        2.0,
+        3.0,
+        55.8,
+        0.0,
+        25.0,
+        0.0,
+        0.0
+      ],
+      "fallback_reason": null
+    }
+  },
+  {
+    "case": "EXTERNAL",
+    "verdict": {
+      "claim_valid": true,
+      "fault_party": "external",
+      "confidence": 0.887167802285705,
+      "outcome": "ZONE_BROADCAST",
+      "reasons": [
+        {
+          "check": "timing",
+          "reason": "Delivery took 80 min vs 30 min promised (+50 min late)."
+        },
+        {
+          "check": "rider_route",
+          "reason": "Rider route looks normal \u2014 no detours or unusual stops."
+        },
+        {
+          "check": "zone",
+          "reason": "8/10 open orders (80%) are late in zone z \u2014 likely zone-wide delay."
+        },
+        {
+          "check": "claim_history",
+          "reason": "Customer has 0 claims in the last 90 days; no unusual pattern."
+        },
+        {
+          "check": "photo",
+          "reason": "No photo submitted with this case."
+        }
+      ],
+      "label_provenance": "Synthetic/pseudo-labelled incident scenarios derived from public/synthetic delivery datasets; not genuine historical fault determinations.",
+      "model_used": true,
+      "model_name": "fault_classifier",
+      "model_version": "2.0-synthetic",
+      "model_prediction": "EXTERNAL",
+      "fault_prediction": "EXTERNAL",
+      "fault_confidence": 0.887167802285705,
+      "resolution": "ZONE_BROADCAST",
+      "class_probabilities": {
+        "EXTERNAL": 0.887167802285705,
+        "MERCHANT": 0.022024629498536792,
+        "NEITHER": 0.035675148221717405,
+        "RIDER": 0.055132419994040636
+      },
+      "features": {
+        "prep_delay_min": 2.0,
+        "pickup_delay_min": 3.0,
+        "travel_delay_min": 52.7,
+        "route_deviation_km": 0.0,
+        "stationary_time_min": 0.0,
+        "zone_late_percentage": 80.0,
+        "zone_average_delay_min": 25.0
+      },
+      "feature_names": [
+        "prep_delay_min",
+        "pickup_delay_min",
+        "travel_delay_min",
+        "route_deviation_km",
+        "stationary_time_min",
+        "zone_late_percentage",
+        "zone_average_delay_min"
+      ],
+      "feature_vector": [
+        2.0,
+        3.0,
+        52.7,
+        0.0,
+        0.0,
+        80.0,
+        25.0
+      ],
+      "fallback_reason": null
+    }
+  },
+  {
+    "case": "NEITHER",
+    "verdict": {
+      "claim_valid": false,
+      "fault_party": "neither",
+      "confidence": 0.8023722127782498,
+      "outcome": "SUPPORT_TICKET",
+      "reasons": [
+        {
+          "check": "timing",
+          "reason": "Order stages were within promised SLAs."
+        },
+        {
+          "check": "rider_route",
+          "reason": "Rider route looks normal \u2014 no detours or unusual stops."
+        },
+        {
+          "check": "zone",
+          "reason": "Only 0% of open orders are late in zone z; no zone-wide pattern."
+        },
+        {
+          "check": "claim_history",
+          "reason": "Customer has 0 claims in the last 90 days; no unusual pattern."
+        },
+        {
+          "check": "photo",
+          "reason": "No photo submitted with this case."
+        }
+      ],
+      "label_provenance": "Synthetic/pseudo-labelled incident scenarios derived from public/synthetic delivery datasets; not genuine historical fault determinations.",
+      "model_used": true,
+      "model_name": "fault_classifier",
+      "model_version": "2.0-synthetic",
+      "model_prediction": "NEITHER",
+      "fault_prediction": "NEITHER",
+      "fault_confidence": 0.8023722127782498,
+      "resolution": "SUPPORT_TICKET",
+      "class_probabilities": {
+        "EXTERNAL": 0.027691949640511505,
+        "MERCHANT": 0.1349218627713666,
+        "NEITHER": 0.8023722127782498,
+        "RIDER": 0.03501397480987195
+      },
+      "features": {
+        "prep_delay_min": 2.0,
+        "pickup_delay_min": 3.0,
+        "travel_delay_min": 5.8,
+        "route_deviation_km": 0.0,
+        "stationary_time_min": 0.0,
+        "zone_late_percentage": 0.0,
+        "zone_average_delay_min": 0.0
+      },
+      "feature_names": [
+        "prep_delay_min",
+        "pickup_delay_min",
+        "travel_delay_min",
+        "route_deviation_km",
+        "stationary_time_min",
+        "zone_late_percentage",
+        "zone_average_delay_min"
+      ],
+      "feature_vector": [
+        2.0,
+        3.0,
+        5.8,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "fallback_reason": null
+    }
+  }
+]

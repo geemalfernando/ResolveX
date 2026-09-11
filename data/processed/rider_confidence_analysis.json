@@ -1,0 +1,53 @@
+{
+  "original_features": {
+    "prep_delay_min": 2.0,
+    "pickup_delay_min": 3.0,
+    "travel_delay_min": 55.8,
+    "route_deviation_km": 0.0,
+    "stationary_time_min": 25.0,
+    "zone_late_percentage": 0.0,
+    "zone_average_delay_min": 0.0
+  },
+  "original_probabilities": {
+    "EXTERNAL": 0.07295134955965814,
+    "MERCHANT": 0.07793090044807492,
+    "NEITHER": 0.2795523006179897,
+    "RIDER": 0.5695654493742773
+  },
+  "original_resolution": "SUPPORT_TICKET",
+  "held_out_rider_confusion": {
+    "EXTERNAL": 144,
+    "MERCHANT": 138,
+    "NEITHER": 136,
+    "RIDER": 5548
+  },
+  "rider_recall": 0.9299363057324841,
+  "training_rider_route_deviation_quantiles_km": {
+    "0.0": 0.3051521894246009,
+    "0.25": 1.7035309896126491,
+    "0.5": 2.4578168898767694,
+    "0.75": 3.1772879248062886,
+    "1.0": 5.386957717732608
+  },
+  "diagnostic_only_route_deviation_sensitivity": {
+    "0": {
+      "EXTERNAL": 0.07295134955965814,
+      "MERCHANT": 0.07793090044807492,
+      "NEITHER": 0.2795523006179897,
+      "RIDER": 0.5695654493742773
+    },
+    "0.5": {
+      "EXTERNAL": 0.03186373825268406,
+      "MERCHANT": 0.044776041400882795,
+      "NEITHER": 0.12355026925284143,
+      "RIDER": 0.7998099510935915
+    },
+    "1.5": {
+      "EXTERNAL": 0.03428742224809747,
+      "MERCHANT": 0.03876124968035675,
+      "NEITHER": 0.07485445753650942,
+      "RIDER": 0.8520968705350362
+    }
+  },
+  "interpretation": "The original case has a stationary stop but no route deviation. NEITHER is its main alternative. Training rider scenarios generally include both signals. These feature substitutions diagnose sensitivity only; no model, probability, or incident was modified."
+}

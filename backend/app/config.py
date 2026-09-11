@@ -28,7 +28,13 @@ class Settings(BaseSettings):
     rider_stationary_minutes_threshold: float = 8.0
     rider_dropoff_distance_threshold_m: float = 150.0
 
-    # Aggregator
+    eta_model_path: str = str(Path(__file__).parent / "ml" / "eta_model.joblib")
+    fault_model_path: str = str(Path(__file__).parent / "ml" / "fault_model.joblib")
+    auto_action_confidence_threshold: float = 0.85
+
+    support_review_confidence_threshold: float = 0.55
+
+    # Legacy aggregator setting retained for compatibility
     aggregator_confidence_threshold: float = 0.6
 
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
