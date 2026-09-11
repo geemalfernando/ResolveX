@@ -65,6 +65,10 @@ def build_case(
     merchant_row = sb.table("merchants").select("*").eq("id", order_row["merchant_id"]).single().execute().data
     customer_row = sb.table("customers").select("*").eq("id", order_row["customer_id"]).single().execute().data
 
+    delivery = (order_row.get("items") or [{}])[0].get("delivery")
+    if delivery:
+        customer_row = {**customer_row, **{k: delivery[k] for k in ("address", "lat", "lng")}}
+
     rider_row = None
     gps_rows = []
     if order_row.get("rider_id"):

@@ -6,7 +6,7 @@ from .ml.eta_model import eta_model
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import get_settings
-from .routers import aggregator, cases, checks, orders, workflow, demo, ops_map
+from .routers import aggregator, cases, checks, orders, workflow, demo, ops_map, commerce
 
 settings = get_settings()
 
@@ -35,6 +35,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(commerce.router)
 app.include_router(cases.router)
 app.include_router(checks.router)
 app.include_router(aggregator.router)

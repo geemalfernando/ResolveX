@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { api } from "../lib/api";
+import RiderAccounts from "../components/RiderAccounts";
 import ClaimRiskBoard from "./ClaimRiskBoard.jsx";
 
 export default function Admin() {
@@ -56,6 +57,7 @@ export default function Admin() {
         ))}
       </div>
 
+      <RiderAccounts />
       <section className="rounded-xl border bg-white p-5 space-y-4">
         <h2 className="font-semibold">Automated refunds & fraud screening</h2>
         <p className="text-sm text-slate-500">Eligible claims receive demo refunds automatically. Unusual claim history pauses automatic refunds for support review; it does not prove fraud.</p>

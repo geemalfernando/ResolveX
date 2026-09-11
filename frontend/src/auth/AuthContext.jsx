@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { supabase } from "../lib/supabaseClient";
+import { supabase, API_BASE_URL } from "../lib/supabaseClient";
 
 const AuthContext = createContext(null);
 
@@ -15,38 +15,13 @@ export function AuthProvider({ children }) {
       return;
     }
 
-    const user = nextSession.user;
-    const { data, error: profileError } = await supabase
-      .from("user_profiles")
-      .select("user_id,email,display_name,role,customer_id,merchant_id")
-      .eq("user_id", user.id)
-      .maybeSingle();
-
-    if (profileError) {
-      // The backend will still validate trusted app_metadata. Keeping this
-      // fallback makes auth usable while the RBAC migration is being applied.
-      const meta = user.app_metadata ?? {};
-      setProfile({
-        user_id: user.id,
-        email: user.email,
-        display_name: meta.display_name ?? user.email,
-        role: meta.role ?? null,
-        customer_id: meta.customer_id ?? null,
-        merchant_id: meta.merchant_id ?? null,
-      });
-      return;
-    }
-
-    setProfile(
-      data ?? {
-        user_id: user.id,
-        email: user.email,
-        display_name: user.email,
-        role: user.app_metadata?.role ?? null,
-        customer_id: user.app_metadata?.customer_id ?? null,
-        merchant_id: user.app_metadata?.merchant_id ?? null,
-      },
-    );
+    try {
+      const response = await fetch(`${API_BASE_URL}/commerce/me`, {headers: {Authorization: `Bearer ${nextSession.access_token}`}});
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || 'Could not load your account');
+      setProfile(data);
+      setError('');
+    } catch (err) { setProfile(null); setError(err.message); }
   }
 
   useEffect(() => {

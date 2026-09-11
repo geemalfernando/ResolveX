@@ -5,7 +5,8 @@ import { useAuth } from "../auth/AuthContext";
 const HOME_BY_ROLE = {
   customer: "/",
   ops: "/ops",
-  partner: "/partner",
+  partner: "/merchant",
+  rider: "/rider",
   support: "/support",
   admin: "/admin",
 };

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import uuid
 from typing import Callable, Optional
 
 from fastapi import Depends, HTTPException, status
@@ -9,7 +10,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from .db import get_supabase
 
 bearer = HTTPBearer(auto_error=False)
-VALID_ROLES = {"customer", "ops", "partner", "support", "admin"}
+VALID_ROLES = {"customer", "ops", "partner", "support", "admin", "rider"}
 
 
 @dataclass(frozen=True)
@@ -20,6 +21,7 @@ class AuthPrincipal:
     customer_id: Optional[str] = None
     merchant_id: Optional[str] = None
     display_name: Optional[str] = None
+    rider_id: Optional[str] = None
 
 
 def _profile_for(user) -> AuthPrincipal:
@@ -67,6 +69,15 @@ def _profile_for(user) -> AuthPrincipal:
         except Exception:
             pass
 
+    if not role and email and getattr(user, "email_confirmed_at", None):
+        customer_id = str(uuid.uuid5(uuid.NAMESPACE_URL, "resolvex/customer/" + str(user.id)))
+        display_name = (getattr(user, "user_metadata", None) or {}).get("name") or email.split("@")[0]
+        sb.table("customers").upsert(dict(id=customer_id, name=display_name, email=email, phone="", address="Address collected at checkout", lat=0, lng=0, zone_id="UNASSIGNED"), on_conflict="id").execute()
+        role = "customer"
+        sb.table("user_profiles").upsert(dict(user_id=str(user.id), email=email, display_name=display_name, role=role, customer_id=customer_id), on_conflict="user_id").execute()
+
+    if role == "rider" and not app_metadata.get("rider_id"):
+        raise HTTPException(403, "Rider account is not linked")
     if role not in VALID_ROLES:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -80,6 +91,7 @@ def _profile_for(user) -> AuthPrincipal:
         )
 
     return AuthPrincipal(
+        rider_id=app_metadata.get("rider_id"),
         user_id=str(user.id),
         email=email,
         role=role,

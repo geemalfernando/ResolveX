@@ -1,5 +1,8 @@
 import { NavLink, Route, Routes } from "react-router-dom";
 
+import Storefront from "./pages/Storefront.jsx";
+import Signup from "./pages/Signup.jsx";
+import OrderDashboard from "./pages/OrderDashboard.jsx";
 import CustomerApp from "./pages/CustomerApp.jsx";
 import OpsDashboard from "./pages/OpsDashboard.jsx";
 import PartnerPortal from "./pages/PartnerPortal.jsx";
@@ -16,7 +19,10 @@ const navLinkClass = ({ isActive }) =>
   }`;
 
 const NAV = [
-  { to: "/", label: "Customer", roles: ["customer", "admin"] },
+  { to: "/", label: "Shop", roles: ["customer", "admin"] },
+  { to: "/my-orders", label: "My orders", roles: ["customer"] },
+  { to: "/merchant", label: "Restaurant orders", roles: ["partner", "admin"] },
+  { to: "/rider", label: "Deliveries", roles: ["rider", "admin"] },
   { to: "/ops", label: "Ops Dashboard", roles: ["ops", "admin"] },
   { to: "/partner", label: "Partner Portal", roles: ["partner", "admin"] },
   { to: "/support", label: "Support Queue", roles: ["support", "admin"] },
@@ -31,10 +37,10 @@ export default function App() {
     <div className="min-h-screen flex flex-col">
       <header className="border-b bg-white">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
-          <span className="font-bold text-lg">ResolveX</span>
+          <NavLink to="/" className="font-bold text-lg">ResolveX</NavLink>
           <div className="flex items-center gap-4">
             {!loading && user && role && (
-              <nav className="hidden md:flex gap-2">
+              <nav className="flex flex-wrap gap-2">
                 {NAV.filter((item) => item.roles.includes(role)).map((item) => (
                   <NavLink key={item.to} to={item.to} end={item.to === "/"} className={navLinkClass}>
                     {item.label}
@@ -42,6 +48,7 @@ export default function App() {
                 ))}
               </nav>
             )}
+            {!loading && !user && <div className="flex gap-3"><NavLink to="/login">Sign in</NavLink><NavLink to="/signup" className="font-semibold">Create account</NavLink></div>}
             {!loading && user && (
               <div className="flex items-center gap-3">
                 <div className="hidden sm:block text-right leading-tight">
@@ -58,7 +65,12 @@ export default function App() {
       <main className="flex-1 bg-slate-50">
         <Routes>
           <Route path="/login" element={<Login />} />
-          <Route path="/" element={<ProtectedRoute allowedRoles={["customer", "admin"]}><CustomerApp /></ProtectedRoute>} />
+          <Route path="/" element={<Storefront />} />
+          <Route path="/signup" element={<Signup />} />
+          <Route path="/my-orders" element={<ProtectedRoute allowedRoles={["customer"]}><OrderDashboard /></ProtectedRoute>} />
+          <Route path="/report" element={<ProtectedRoute allowedRoles={["customer", "admin"]}><CustomerApp /></ProtectedRoute>} />
+          <Route path="/merchant" element={<ProtectedRoute allowedRoles={["partner", "admin"]}><OrderDashboard mode="merchant" /></ProtectedRoute>} />
+          <Route path="/rider" element={<ProtectedRoute allowedRoles={["rider", "admin"]}><OrderDashboard mode="rider" /></ProtectedRoute>} />
           <Route path="/ops" element={<ProtectedRoute allowedRoles={["ops", "admin"]}><OpsDashboard /></ProtectedRoute>} />
           <Route path="/partner" element={<ProtectedRoute allowedRoles={["partner", "admin"]}><PartnerPortal /></ProtectedRoute>} />
           <Route path="/support" element={<ProtectedRoute allowedRoles={["support", "admin"]}><SupportQueue /></ProtectedRoute>} />
