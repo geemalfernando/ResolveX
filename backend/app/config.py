@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     supabase_secret_key: str = ""
     supabase_jwks_url: str = ""
     gemini_api_key: str = ""
+    photo_use_gemini: bool = True
+    aggregator_use_gemini: bool = True
 
     # ZONE check: fraction of open orders in a zone that must be late to flag zone-wide delay
     zone_late_ratio_threshold: float = 0.30

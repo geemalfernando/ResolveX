@@ -1,7 +1,96 @@
-import { useEffect, useState } from 'react';
-import { api } from '../lib/api';
-import MapView from '../components/MapView';
-export default function OpsDashboard(){const [ops,setOps]=useState(null),[feed,setFeed]=useState(null),[error,setError]=useState(''),[busy,setBusy]=useState(false);
- const load=()=>Promise.all([api('/workflow/ops'),api('/demo/state')]).then(([o,f])=>{setOps(o);setFeed(f);}).catch(e=>setError(e.message));useEffect(()=>{load();const id=setInterval(load,5000);return()=>clearInterval(id);},[]);async function control(action){setBusy(true);setError('');try{setFeed(await api('/demo/control',{action}));await load();}catch(e){setError(e.message);}finally{setBusy(false);}}
- return <div className="max-w-7xl mx-auto p-6 space-y-5"><h1 className="text-2xl font-bold">Delivery operations</h1>{error&&<p role="alert" className="text-red-700">{error}</p>}<div className="grid grid-cols-2 md:grid-cols-6 gap-3">{Object.entries(ops?.counts??{}).map(([k,v])=><div className="rounded-lg border bg-white p-3" key={k}><p className="text-xs capitalize">{k.replaceAll('_',' ')}</p><b className="text-2xl">{v}</b></div>)}</div><div className="grid lg:grid-cols-2 gap-5"><section className="rounded-xl border bg-white p-5"><div className="flex justify-between"><h2 className="font-bold">Live delivery feed</h2><span className="text-xs">{feed?.running?'Running':'Paused'} · Accelerated demo</span></div><div className="flex flex-wrap gap-2 my-4">{[['start','Start Busy Evening'],['pause','Pause'],['reset','Reset Demo'],['step','Next Stage']].map(([a,l])=><button className="btn-secondary" disabled={busy} key={a} onClick={()=>control(a)}>{l}</button>)}</div>{feed?.error&&<p role="alert">{feed.error}</p>}<div className="max-h-[30rem] overflow-auto space-y-2">{feed?.orders.map(o=><div key={o.id} className={`border-l-4 rounded p-3 bg-slate-50 ${o.late?'border-red-500':o.stage==='READY'?'border-amber-400':'border-emerald-500'}`}><div className="flex justify-between"><b>{o.scenario} · {o.id.slice(0,8)}</b><span>{o.stage}</span></div><p className="text-xs">Promised {o.expected_minutes??30} min · ETA {o.eta_minutes??'pending'} · {o.late?'Late':'On track'}</p>{o.case_id?<a className="text-sm underline" href={`/?case=${o.case_id}`}>Incident automatically created before complaint</a>:<p className="text-xs">No customer complaint</p>}</div>)}</div></section><div className="rounded-xl overflow-hidden border h-[36rem]"><MapView/></div></div><section className="rounded-xl border bg-white p-5"><h2 className="font-bold mb-3">Active zone incidents</h2>{ops?.zone_incidents.map(z=><div key={z.id} className="border-t py-3"><b>{z.id} · {z.zone_id}</b><p>{z.active_orders} active orders · {z.late_orders} late · {z.customers_notified} customers notified</p><details><summary>Affected orders and notices</summary>{z.notifications.map(n=><p className="text-xs py-1" key={n.id}>{n.order_ids.join(', ')} — Notice delivered in app</p>)}</details></div>)}</section></div>;
+import { useEffect, useState } from "react";
+
+import MapView from "../components/MapView.jsx";
+import { supabase } from "../lib/supabaseClient";
+
+/**
+ * Ops team view: live map + case feed (outcomes only — claim risk % lives on /claims).
+ */
+export default function OpsDashboard() {
+  const [cases, setCases] = useState([]);
+  const [verdicts, setVerdicts] = useState({});
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadCases() {
+      const { data, error } = await supabase
+        .from("cases")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(40);
+      if (error || !isMounted) return;
+      setCases(data ?? []);
+
+      if (data?.length) {
+        const ids = data.map((c) => c.id);
+        const { data: verdictRows } = await supabase
+          .from("verdicts")
+          .select("case_id, outcome, fault_party, confidence")
+          .in("case_id", ids);
+        if (!isMounted) return;
+        const vmap = {};
+        for (const v of verdictRows ?? []) vmap[v.case_id] = v;
+        setVerdicts(vmap);
+      }
+    }
+    loadCases();
+
+    const channel = supabase
+      .channel("cases-realtime")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "cases" }, (payload) => {
+        setCases((prev) => [payload.new, ...prev].slice(0, 40));
+      })
+      .subscribe();
+
+    return () => {
+      isMounted = false;
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  return (
+    <div className="max-w-6xl mx-auto px-4 py-6 grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="lg:col-span-2 rounded-lg overflow-hidden border h-[70vh]">
+        <MapView />
+      </div>
+
+      <div className="rounded-lg border bg-white p-4 flex flex-col gap-3 max-h-[70vh]">
+        <h2 className="font-semibold">Live cases</h2>
+        <ul className="space-y-2 overflow-y-auto flex-1">
+          {cases.length === 0 && <li className="text-sm text-slate-400">No cases yet.</li>}
+          {cases.map((c) => {
+            const v = verdicts[c.id];
+            const abuse = v?.fault_party === "customer_abuse";
+            const support = v?.outcome === "SUPPORT_TICKET";
+            return (
+              <li key={c.id} className="rounded-md border px-3 py-2 text-sm">
+                <div className="font-medium flex items-center justify-between gap-2">
+                  <span>Order {String(c.order_id).slice(0, 8)}…</span>
+                  <span className="flex items-center gap-1">
+                    {abuse && (
+                      <span className="text-[10px] rounded-full bg-rose-100 text-rose-800 px-1.5 py-0.5">
+                        fraud
+                      </span>
+                    )}
+                    {!abuse && support && (
+                      <span className="text-[10px] rounded-full bg-amber-100 text-amber-800 px-1.5 py-0.5">
+                        review
+                      </span>
+                    )}
+                  </span>
+                </div>
+                <div className="text-slate-500">
+                  {c.trigger} · {v?.outcome ?? c.status}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+        <p className="text-xs text-slate-400 border-t pt-2">
+          Claim risk scores and Approve/Deny are on the Claim Risk page.
+        </p>
+      </div>
+    </div>
+  );
 }

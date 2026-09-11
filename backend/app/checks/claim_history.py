@@ -1,66 +1,86 @@
-"""CLAIM_HISTORY check — plain code / rules.
+"""CLAIM_HISTORY check — calibrated IsolationForest + XGBoost, with rule fallback.
 
-Flags accounts with unusual refund claim patterns: too many claims recently, claims that
-are always approved (possible lenient-agent exploitation), or unusually varied reasons
-(possible serial-claim behaviour).
+Flags unusual refund patterns. Anomaly alone does not flag when risk is near zero;
+risk_score drives the decision so mid-band scores stay meaningful.
 """
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
-
+from ..ml.claim_history_model import LOOKBACK_DAYS, extract_features, predict
 from ..models import Case, CheckName, CheckResult
 
-LOOKBACK_DAYS = 90
 HIGH_FREQUENCY_THRESHOLD = 3
 ALWAYS_APPROVED_MIN_CLAIMS = 2
+RISK_PROBABILITY_THRESHOLD = 0.55
+# IsolationForest can fire on rare-but-legit histories; only use it when risk is elevated.
+ANOMALY_RISK_FLOOR = 0.35
+
+
+def _rule_flags(features: dict[str, float]) -> list[str]:
+    flags: list[str] = []
+    claims_count = features["claims_last_90_days"]
+    if claims_count >= HIGH_FREQUENCY_THRESHOLD:
+        flags.append("high_frequency")
+    if claims_count >= ALWAYS_APPROVED_MIN_CLAIMS and features["approved_ratio"] >= 0.99:
+        flags.append("always_approved")
+    if features["reason_diversity"] >= 3 and claims_count >= 3:
+        flags.append("varied_reasons")
+    return flags
 
 
 def run(case: Case) -> CheckResult:
-    cutoff = datetime.now(timezone.utc) - timedelta(days=LOOKBACK_DAYS)
-    recent = [c for c in case.customer_refund_history if c.created_at >= cutoff]
+    features = extract_features(case.customer_refund_history)
+    risk_flags = _rule_flags(features)
+    prediction = predict(case.customer_refund_history)
 
-    claims_count = len(recent)
-    approved = [c for c in recent if c.outcome in ("approved", "voucher")]
-    approved_ratio = (len(approved) / claims_count) if claims_count else 0.0
-    reason_diversity = len({c.reason for c in recent})
+    if prediction:
+        risk_score = prediction["risk_probability"]
+        anomaly_supports = prediction["anomaly"] and risk_score >= ANOMALY_RISK_FLOOR
+        flagged = risk_score >= RISK_PROBABILITY_THRESHOLD or anomaly_supports
+        source = prediction["source"]
+        confidence = 0.62 + min(risk_score, 0.35) if flagged else 0.86
+    else:
+        risk_score = min(
+            0.25 * min(features["claims_last_90_days"], 4)
+            + (0.2 if "always_approved" in risk_flags else 0.0)
+            + (0.15 if "varied_reasons" in risk_flags else 0.0),
+            0.95,
+        )
+        flagged = len(risk_flags) > 0
+        source = "rules"
+        confidence = 0.6 + risk_score / 3 if flagged else 0.8
 
-    risk_flags: list[str] = []
-    if claims_count >= HIGH_FREQUENCY_THRESHOLD:
-        risk_flags.append("high_frequency")
-    if claims_count >= ALWAYS_APPROVED_MIN_CLAIMS and approved_ratio >= 0.99:
-        risk_flags.append("always_approved")
-    if reason_diversity >= 3 and claims_count >= 3:
-        risk_flags.append("varied_reasons")
-
-    risk_score = min(
-        0.25 * min(claims_count, 4)
-        + (0.2 if "always_approved" in risk_flags else 0.0)
-        + (0.15 if "varied_reasons" in risk_flags else 0.0),
-        0.95,
-    )
-
-    flagged = len(risk_flags) > 0
-    confidence = 0.6 + risk_score / 3 if flagged else 0.8
-
+    claims_count = int(features["claims_last_90_days"])
     if flagged:
         summary = (
             f"Customer has {claims_count} claims in the last {LOOKBACK_DAYS} days "
-            f"({', '.join(risk_flags)})."
+            f"(risk={risk_score:.2f}{', ' + ', '.join(risk_flags) if risk_flags else ''})."
         )
     else:
-        summary = f"Customer has {claims_count} claims in the last {LOOKBACK_DAYS} days; no unusual pattern."
+        summary = (
+            f"Customer has {claims_count} claims in the last {LOOKBACK_DAYS} days; "
+            "no unusual pattern."
+        )
+
+    details = {
+        "claims_last_90_days": claims_count,
+        "approved_ratio": round(features["approved_ratio"], 2),
+        "reason_diversity": int(features["reason_diversity"]),
+        "risk_score": round(float(risk_score), 2),
+        "risk_flags": risk_flags,
+        "source": source,
+    }
+    if prediction:
+        details["anomaly"] = prediction["anomaly"]
+        details["anomaly_score"] = prediction["anomaly_score"]
+        details["risk_probability"] = prediction["risk_probability"]
+        details["risk_probability_raw"] = prediction.get("risk_probability_raw")
+        details["probability_temperature"] = prediction.get("probability_temperature")
 
     return CheckResult(
         check_name=CheckName.claim_history,
         flagged=flagged,
         confidence=round(min(confidence, 0.99), 2),
         summary=summary,
-        details={
-            "claims_last_90_days": claims_count,
-            "approved_ratio": round(approved_ratio, 2),
-            "reason_diversity": reason_diversity,
-            "risk_score": round(risk_score, 2),
-            "risk_flags": risk_flags,
-        },
+        details=details,
     )
