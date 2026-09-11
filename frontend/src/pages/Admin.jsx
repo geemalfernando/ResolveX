@@ -113,7 +113,7 @@ export default function Admin() {
             <div>
               <h2 className="font-semibold">Claim Risk · AI</h2>
               <p className="text-xs text-slate-500 mt-1">
-                Chanith&apos;s claim-history model is surfaced here for administrators as well as on the dedicated navigation page.
+                Claim-history model signals are available here for administrators and on the dedicated Claim Risk page.
               </p>
             </div>
             <span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-medium text-white">
