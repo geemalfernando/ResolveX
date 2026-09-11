@@ -5,6 +5,7 @@ import OpsDashboard from "./pages/OpsDashboard.jsx";
 import PartnerPortal from "./pages/PartnerPortal.jsx";
 import Admin from "./pages/Admin.jsx";
 import SupportQueue from "./pages/SupportQueue.jsx";
+import ClaimRiskBoard from "./pages/ClaimRiskBoard.jsx";
 import Login from "./pages/Login.jsx";
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
 import { useAuth } from "./auth/AuthContext.jsx";
@@ -19,6 +20,7 @@ const NAV = [
   { to: "/ops", label: "Ops Dashboard", roles: ["ops", "admin"] },
   { to: "/partner", label: "Partner Portal", roles: ["partner", "admin"] },
   { to: "/support", label: "Support Queue", roles: ["support", "admin"] },
+  { to: "/claims", label: "Claim Risk", roles: ["admin"] },
   { to: "/admin", label: "Admin", roles: ["admin"] },
 ];
 
@@ -60,6 +62,7 @@ export default function App() {
           <Route path="/ops" element={<ProtectedRoute allowedRoles={["ops", "admin"]}><OpsDashboard /></ProtectedRoute>} />
           <Route path="/partner" element={<ProtectedRoute allowedRoles={["partner", "admin"]}><PartnerPortal /></ProtectedRoute>} />
           <Route path="/support" element={<ProtectedRoute allowedRoles={["support", "admin"]}><SupportQueue /></ProtectedRoute>} />
+          <Route path="/claims" element={<ProtectedRoute allowedRoles={["admin"]}><ClaimRiskBoard /></ProtectedRoute>} />
           <Route path="/admin" element={<ProtectedRoute allowedRoles={["admin"]}><Admin /></ProtectedRoute>} />
         </Routes>
       </main>

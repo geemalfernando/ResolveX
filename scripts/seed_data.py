@@ -20,6 +20,7 @@ import json
 import random
 import uuid
 from datetime import timedelta
+from pathlib import Path
 
 from faker import Faker
 
@@ -124,44 +125,187 @@ def seed_customers(sb) -> list[dict]:
     return customers
 
 
-def seed_refund_history(sb, customers: list[dict]) -> None:
-    """A handful of customers with a normal claim or two, plus two deliberately
-    suspicious accounts (many claims, always approved) to trip the CLAIM_HISTORY check."""
-    entries = []
+def seed_refund_history(sb, customers: list[dict]) -> dict[str, list[dict]]:
+    """Seed refund histories across low / mid / high risk bands for every customer.
 
-    normal_customers = random.sample(customers, k=6)
-    for customer in normal_customers:
+    Returns band → customer list so later seeding can attach demo orders/cases.
+    """
+    entries: list[dict] = []
+    shuffled = customers[:]
+    random.shuffle(shuffled)
+
+    low = shuffled[:10]
+    low_mid = shuffled[10:16]
+    mid = shuffled[16:22]
+    high_mid = shuffled[22:26]
+    high = shuffled[26:]
+
+    def add_claim(customer: dict, reason: str, outcome: str, amount: float, days_ago: int) -> None:
+        entries.append(
+            {
+                "id": str(uuid.uuid4()),
+                "customer_id": customer["id"],
+                "order_id": None,
+                "reason": reason,
+                "amount": round(amount, 2),
+                "outcome": outcome,
+                "created_at": (now_utc() - timedelta(days=days_ago)).isoformat(),
+            }
+        )
+
+    for customer in low:
+        n = random.choice([0, 0, 1])
+        for _ in range(n):
+            add_claim(
+                customer,
+                random.choice(["late", "damaged"]),
+                random.choice(["denied", "voucher", "approved"]),
+                random.uniform(150, 450),
+                random.randint(20, 80),
+            )
+
+    for customer in low_mid:
         for _ in range(random.randint(1, 2)):
-            entries.append(
+            add_claim(
+                customer,
+                random.choice(["late", "wrong_item", "damaged"]),
+                random.choice(["approved", "denied", "voucher"]),
+                random.uniform(200, 600),
+                random.randint(12, 60),
+            )
+        print(f"  -> low-mid claims for {customer['name']} ({customer['id']})")
+
+    for customer in mid:
+        for _ in range(random.randint(2, 3)):
+            outcome = random.choices(
+                ["approved", "voucher", "denied"],
+                weights=[0.6, 0.25, 0.15],
+                k=1,
+            )[0]
+            add_claim(
+                customer,
+                random.choice(["late", "wrong_item", "damaged"]),
+                outcome,
+                random.uniform(300, 850),
+                random.randint(4, 35),
+            )
+        print(f"  -> mid-risk claims for {customer['name']} ({customer['id']})")
+
+    for customer in high_mid:
+        for i, reason in enumerate(["late", "wrong_item", "damaged"]):
+            add_claim(
+                customer,
+                reason,
+                random.choices(["approved", "voucher"], weights=[0.8, 0.2], k=1)[0],
+                random.uniform(400, 1000),
+                5 + i * 7,
+            )
+        print(f"  -> high-mid claims for {customer['name']} ({customer['id']})")
+
+    for customer in high:
+        for i, reason in enumerate(["late", "wrong_item", "damaged", "missing_item"]):
+            add_claim(customer, reason, "approved", random.uniform(450, 1200), 2 + i * 5)
+        add_claim(customer, "late", "approved", random.uniform(500, 900), 1)
+        print(f"  -> HIGH-risk / suspicious for {customer['name']} ({customer['id']})")
+
+    if entries:
+        sb.table("refund_history").insert(entries).execute()
+
+    bands = {
+        "low": low,
+        "low_mid": low_mid,
+        "mid": mid,
+        "high_mid": high_mid,
+        "high": high,
+    }
+    print(
+        f"Seeded {len(entries)} refund_history rows "
+        f"(low={len(low)}, low_mid={len(low_mid)}, mid={len(mid)}, "
+        f"high_mid={len(high_mid)}, high={len(high)})"
+    )
+    return bands
+
+
+def seed_band_demo_orders(
+    sb,
+    merchants: list[dict],
+    riders: list[dict],
+    bands: dict[str, list[dict]],
+) -> list[dict]:
+    """One completed order per band customer so claim-risk demos always have an order_id."""
+    orders: list[dict] = []
+    gps_rows: list[dict] = []
+    labeled: list[dict] = []
+
+    for band_name, customers in bands.items():
+        for customer in customers:
+            zone_merchants = [m for m in merchants if m["zone_id"] == customer["zone_id"]]
+            merchant = random.choice(zone_merchants or merchants)
+            rider = random.choice(riders)
+            order_id = str(uuid.uuid4())
+            placed_at = now_utc() - timedelta(days=random.randint(1, 3), hours=random.randint(1, 10))
+            promised_prep = 15
+            promised_delivery = 35
+            prep_started_at = placed_at + timedelta(minutes=1)
+            ready_at = prep_started_at + timedelta(minutes=promised_prep + random.randint(-2, 4))
+            picked_up_at = ready_at + timedelta(minutes=3)
+            route = interpolate_route(
+                (merchant["lat"], merchant["lng"]),
+                (customer["lat"], customer["lng"]),
+                picked_up_at,
+                picked_up_at + timedelta(minutes=18),
+                num_points=8,
+            )
+            dropped_off_at = route[-1]["recorded_at"]
+            orders.append(
                 {
-                    "id": str(uuid.uuid4()),
+                    "id": order_id,
+                    "merchant_id": merchant["id"],
+                    "rider_id": rider["id"],
                     "customer_id": customer["id"],
-                    "order_id": None,
-                    "reason": random.choice(["late", "wrong_item", "damaged", "missing_item"]),
-                    "amount": round(random.uniform(200, 800), 2),
-                    "outcome": random.choice(["approved", "denied", "voucher"]),
-                    "created_at": (now_utc() - timedelta(days=random.randint(1, 60))).isoformat(),
+                    "zone_id": customer["zone_id"],
+                    "items": make_items(),
+                    "status": "completed",
+                    "promised_prep_minutes": promised_prep,
+                    "promised_delivery_minutes": promised_delivery,
+                    "placed_at": placed_at.isoformat(),
+                    "prep_started_at": prep_started_at.isoformat(),
+                    "ready_at": ready_at.isoformat(),
+                    "picked_up_at": picked_up_at.isoformat(),
+                    "dropped_off_at": dropped_off_at.isoformat(),
+                    "is_late_flagged": False,
                 }
             )
-
-    suspicious_customers = random.sample([c for c in customers if c not in normal_customers], k=2)
-    for customer in suspicious_customers:
-        for reason in ["late", "wrong_item", "damaged", "missing_item"]:
-            entries.append(
+            labeled.append(
                 {
-                    "id": str(uuid.uuid4()),
+                    "band": band_name,
+                    "order_id": order_id,
                     "customer_id": customer["id"],
-                    "order_id": None,
-                    "reason": reason,
-                    "amount": round(random.uniform(300, 900), 2),
-                    "outcome": "approved",
-                    "created_at": (now_utc() - timedelta(days=random.randint(1, 30))).isoformat(),
+                    "customer_name": customer["name"],
                 }
             )
-        print(f"  -> flagged suspicious refund history for {customer['name']} ({customer['id']})")
+            for p in route:
+                gps_rows.append(
+                    {
+                        "order_id": order_id,
+                        "rider_id": rider["id"],
+                        "lat": p["lat"],
+                        "lng": p["lng"],
+                        "speed_kmh": p["speed_kmh"],
+                        "recorded_at": p["recorded_at"].isoformat(),
+                    }
+                )
 
-    sb.table("refund_history").insert(entries).execute()
-    print(f"Seeded {len(entries)} refund_history rows")
+    if orders:
+        sb.table("orders").insert(orders).execute()
+        sb.table("rider_gps_points").insert(gps_rows).execute()
+
+    out_path = Path(__file__).resolve().parent / "seed_output" / "claim_band_orders.json"
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(out_path, "w") as f:
+        json.dump(labeled, f, indent=2)
+    print(f"Seeded {len(orders)} band demo orders -> {out_path}")
+    return labeled
 
 
 def seed_historical_orders(sb, merchants: list[dict], riders: list[dict], customers: list[dict]) -> list[dict]:
@@ -342,15 +486,52 @@ def seed_tonight_orders(sb, merchants: list[dict], riders: list[dict], customers
     print(f"Wrote live order plan for replay_feed.py -> {LIVE_ORDERS_PLAN_PATH}")
 
 
+def reset_tables(sb) -> None:
+    """Wipe demo tables in FK-safe order so seed_data can be re-run."""
+    # GPS first (bigint id + FK to orders), then uuid tables.
+    sb.table("rider_gps_points").delete().gte("id", 0).execute()
+    print("  cleared rider_gps_points")
+    for table in (
+        "support_tickets",
+        "verdicts",
+        "check_results",
+        "cases",
+        "complaints",
+        "refund_history",
+        "orders",
+        "customers",
+        "riders",
+        "merchants",
+    ):
+        sb.table(table).delete().neq("id", "00000000-0000-0000-0000-000000000000").execute()
+        print(f"  cleared {table}")
+    print("Reset complete.\n")
+
+
 def main() -> None:
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--reset",
+        action="store_true",
+        help="Clear existing demo rows before seeding (needed if you already seeded once).",
+    )
+    args = parser.parse_args()
+
     sb = get_client()
+    if args.reset:
+        reset_tables(sb)
     merchants = seed_merchants(sb)
     riders = seed_riders(sb)
     customers = seed_customers(sb)
-    seed_refund_history(sb, customers)
+    bands = seed_refund_history(sb, customers)
     seed_historical_orders(sb, merchants, riders, customers)
+    seed_band_demo_orders(sb, merchants, riders, bands)
     seed_tonight_orders(sb, merchants, riders, customers)
-    print("\nDone. Run scripts/replay_feed.py to play tonight's orders live.")
+    print("\nDone. Next:")
+    print("  python scripts/seed_claim_cases.py   # create cases with claim-risk variation for the UI")
+    print("  python scripts/replay_feed.py        # play tonight's orders live")
 
 
 if __name__ == "__main__":

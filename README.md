@@ -62,7 +62,7 @@ the frontend never talks to Gemini directly.
 ```
 resolvex/
 ├── frontend/        React + Vite + Tailwind. Routes: / (CustomerApp), /ops (OpsDashboard),
-│                    /partner (PartnerPortal), /support (SupportQueue). Leaflet + OSM map,
+│                    /partner (PartnerPortal), /claims (ClaimRiskBoard). Leaflet + OSM map,
 │                    wired to Supabase Realtime.
 ├── backend/         FastAPI app.
 │   └── app/
@@ -138,7 +138,7 @@ npm run dev
 ```
 
 Open http://localhost:5173. `/` is the customer complaint form (phone width), `/ops` is the
-live ops map, `/partner` is the merchant portal, `/support` is the human agent queue.
+live ops map, `/partner` is the merchant portal, `/claims` is claim-history risk + admin Approve/Deny.
 
 ### 5. Seed data + live replay
 

@@ -1,7 +1,7 @@
-"""PHOTO check — AI (Gemini 3.6 Flash multimodal).
+"""PHOTO check — Gemini when available, complaint-type fallback otherwise.
 
-Compares the customer's uploaded photo against the ordered items and flags a
-mismatch (wrong item) or visible damage.
+Gemini is optional. Token / quota failures must not blank the rest of the
+pipeline: a late / damaged / wrong-item complaint still produces a usable signal.
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ from google import genai
 from google.genai import types
 
 from ..config import get_settings
-from ..models import Case, CheckName, CheckResult
+from ..models import Case, CheckName, CheckResult, ComplaintType
 
 logger = logging.getLogger(__name__)
 _gemini_quota_exhausted = False
@@ -46,13 +46,36 @@ Respond ONLY with JSON matching this shape, no markdown fences, no commentary:
 }}
 """
 
-_STUB_RESULT = {
-    "complaint_supported": None,
-    "match": None,
-    "detected_items": [],
-    "damage_detected": False,
-    "model_notes": "Photo AI unavailable; treated as inconclusive and routed for review.",
-}
+
+def _fallback_from_complaint(case: Case, expected_items: list[str]) -> dict:
+    complaint_type = case.complaint.type if case.complaint else None
+    if complaint_type == ComplaintType.damaged:
+        return {
+            "match": True,
+            "detected_items": expected_items,
+            "damage_detected": True,
+            "model_notes": "Local fallback: damaged complaint treated as visible damage because Gemini was unavailable.",
+        }
+    if complaint_type == ComplaintType.wrong_item:
+        return {
+            "match": False,
+            "detected_items": ["unrecognized item"],
+            "damage_detected": False,
+            "model_notes": "Local fallback: wrong-item complaint treated as a mismatch because Gemini was unavailable.",
+        }
+    if complaint_type == ComplaintType.missing_item:
+        return {
+            "match": False,
+            "detected_items": [],
+            "damage_detected": False,
+            "model_notes": "Local fallback: missing-item complaint treated as incomplete because Gemini was unavailable.",
+        }
+    return {
+        "match": True,
+        "detected_items": expected_items,
+        "damage_detected": False,
+        "model_notes": "Local fallback: photo is not the deciding signal for this complaint type.",
+    }
 
 
 def _fetch_image_bytes(photo_url: str) -> tuple[bytes, str]:
@@ -62,16 +85,13 @@ def _fetch_image_bytes(photo_url: str) -> tuple[bytes, str]:
     return response.content, mime_type
 
 
-def _call_gemini(photo_url: str, prompt: str) -> dict:
-    global _gemini_quota_exhausted
-
+def _call_gemini(photo_url: str, prompt: str) -> dict | None:
     settings = get_settings()
-    if not settings.gemini_api_key or _gemini_quota_exhausted:
-        return _STUB_RESULT
+    if not settings.gemini_api_key or not settings.photo_use_gemini:
+        return None
 
     try:
         image_bytes, mime_type = _fetch_image_bytes(photo_url)
-
         client = genai.Client(api_key=settings.gemini_api_key)
         response = client.models.generate_content(
             model="gemini-3.6-flash",
@@ -82,18 +102,9 @@ def _call_gemini(photo_url: str, prompt: str) -> dict:
             config=types.GenerateContentConfig(response_mime_type="application/json"),
         )
         return json.loads(response.text)
-    except Exception as exc:
-        if "429" in str(exc) or "RESOURCE_EXHAUSTED" in str(exc):
-            _gemini_quota_exhausted = True
-            logger.warning("PHOTO Gemini quota exhausted; disabling photo AI for this process")
-        else:
-            logger.warning("PHOTO check Gemini call failed; falling back to inconclusive result: %s", exc)
-        return {
-            "match": None,
-            "detected_items": [],
-            "damage_detected": False,
-            "model_notes": "Gemini call failed — treated as inconclusive, needs human review.",
-        }
+    except Exception:
+        logger.exception("PHOTO check Gemini call failed; using local complaint-type fallback")
+        return None
 
 
 def _call_gemini_with_timeout(photo_url: str, prompt: str) -> dict:
@@ -114,19 +125,47 @@ def _call_gemini_with_timeout(photo_url: str, prompt: str) -> dict:
 
 
 def run(case: Case) -> CheckResult:
+    expected_items = [item.name for item in case.order.items]
+
     if case.complaint is None or not case.complaint.photo_url:
+        if case.complaint and case.complaint.type in {
+            ComplaintType.wrong_item,
+            ComplaintType.damaged,
+            ComplaintType.missing_item,
+        }:
+            return CheckResult(
+                check_name=CheckName.photo,
+                flagged=False,
+                confidence=0.25,
+                summary="Photo required for this complaint type — asking the customer for one more photo.",
+                details={
+                    "match": None,
+                    "expected_items": expected_items,
+                    "detected_items": [],
+                    "damage_detected": False,
+                    "source": "missing_photo",
+                },
+            )
         return CheckResult(
             check_name=CheckName.photo,
             flagged=False,
             confidence=0.0,
             summary="No photo submitted with this case.",
-            details={"match": None, "expected_items": [], "detected_items": [], "damage_detected": False},
+            details={
+                "match": None,
+                "expected_items": expected_items,
+                "detected_items": [],
+                "damage_detected": False,
+                "source": "no_photo",
+            },
         )
 
-    expected_items = [item.name for item in case.order.items]
-    prompt = PHOTO_PROMPT_TEMPLATE.format(items="\n".join(f"- {name}" for name in expected_items), complaint_type=case.complaint.type.value, description=case.complaint.description or "No description")
-
-    result = _call_gemini_with_timeout(case.complaint.photo_url, prompt)
+    prompt = PHOTO_PROMPT_TEMPLATE.format(items="\n".join(f"- {name}" for name in expected_items))
+    result = _call_gemini(case.complaint.photo_url, prompt)
+    source = "gemini"
+    if result is None:
+        result = _fallback_from_complaint(case, expected_items)
+        source = "local_fallback"
 
     mismatch = result.get("match") is False
     damaged = bool(result.get("damage_detected"))
@@ -157,5 +196,6 @@ def run(case: Case) -> CheckResult:
             "detected_items": result.get("detected_items", []),
             "damage_detected": damaged,
             "model_notes": result.get("model_notes", ""),
+            "source": source,
         },
     )
