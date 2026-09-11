@@ -6,6 +6,7 @@ whichever stage breached its SLA the most.
 
 from __future__ import annotations
 
+from ..ml.eta_model import predict_minutes
 from ..models import Case, CheckName, CheckResult
 
 
@@ -27,6 +28,12 @@ def run(case: Case) -> CheckResult:
     prep_delay = (prep_minutes - prep_promised) if prep_minutes is not None else 0.0
     delivery_delay = (
         (delivery_minutes - delivery_promised) if delivery_minutes is not None else 0.0
+    )
+    predicted_delivery_minutes = predict_minutes(case)
+    predicted_delay = (
+        predicted_delivery_minutes - delivery_promised
+        if predicted_delivery_minutes is not None
+        else None
     )
 
     stage_breached = "none"
@@ -65,6 +72,9 @@ def run(case: Case) -> CheckResult:
             "delivery_minutes": round(delivery_minutes, 1) if delivery_minutes is not None else None,
             "delivery_promised_minutes": delivery_promised,
             "delivery_delay_minutes": round(delivery_delay, 1),
+            "predicted_delivery_minutes": predicted_delivery_minutes,
+            "predicted_delay_minutes": round(predicted_delay, 1) if predicted_delay is not None else None,
+            "prediction_source": "zomato_random_forest" if predicted_delivery_minutes is not None else "sla_rules",
             "stage_breached": stage_breached,
         },
     )
