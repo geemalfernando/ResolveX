@@ -10,6 +10,9 @@ class Settings(BaseSettings):
 
     supabase_url: str = ""
     supabase_key: str = ""
+    supabase_publishable_key: str = ""
+    supabase_secret_key: str = ""
+    supabase_jwks_url: str = ""
     gemini_api_key: str = ""
 
     # ZONE check: fraction of open orders in a zone that must be late to flag zone-wide delay

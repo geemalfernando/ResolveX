@@ -18,7 +18,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(REPO_ROOT / ".env")
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
-SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
+SUPABASE_KEY = os.environ.get("SUPABASE_SECRET_KEY") or os.environ.get("SUPABASE_KEY", "")
 
 # Demo city center (Colombo) — swap for wherever you're presenting.
 CITY_CENTER = (6.9271, 79.8612)
@@ -37,7 +37,7 @@ LIVE_ORDERS_PLAN_PATH = Path(__file__).resolve().parent / "seed_output" / "live_
 def get_client() -> Client:
     if not SUPABASE_URL or not SUPABASE_KEY:
         raise RuntimeError(
-            "SUPABASE_URL / SUPABASE_KEY are not set. Copy .env.example to .env and fill them in "
+            "SUPABASE_URL / SUPABASE_SECRET_KEY are not set. Copy .env.example to .env and fill them in "
             "(use the service role key here, not the anon key, so seeding bypasses RLS)."
         )
     return create_client(SUPABASE_URL, SUPABASE_KEY)
