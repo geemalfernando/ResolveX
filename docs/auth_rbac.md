@@ -18,21 +18,67 @@ The frontend route guard improves UX, but it is **not** the security boundary. F
 
 Run `supabase/migrations/20260912_rbac_auth.sql` in the Supabase SQL editor or through your normal migration workflow.
 
-## 2. Create demo users
+Do not execute the `.sql` file directly in zsh. For a quick local copy:
 
-Create users in Supabase **Authentication -> Users**. For a 24-hour ideathon, create one account for each role, for example:
+```bash
+pbcopy < supabase/migrations/20260912_rbac_auth.sql
+```
 
-- `customer@resolvex.demo`
-- `ops@resolvex.demo`
-- `partner@resolvex.demo`
-- `support@resolvex.demo`
-- `admin@resolvex.demo`
+Paste it into **Supabase -> SQL Editor -> New query -> Run**.
 
-Use strong demo passwords and do not commit them.
+Verify:
 
-## 3. Assign roles
+```sql
+select * from public.user_profiles;
+```
 
-Copy each Auth user UUID and insert a profile from the SQL editor.
+## 2. Seed all five demo login accounts automatically
+
+A `400` from `/auth/v1/token?grant_type=password` normally means the Supabase Auth user does not exist yet, the password is wrong, or the account is not confirmed. Creating only a row in `public.user_profiles` does not create an Auth login.
+
+ResolveX therefore includes an idempotent server-side seeder that creates/updates the Auth users, confirms their emails, creates a demo customer and merchant if needed, and links every role in `user_profiles`.
+
+Your root `.env` must contain:
+
+```env
+SUPABASE_URL=https://<project-ref>.supabase.co
+SUPABASE_SECRET_KEY=<server secret key>
+```
+
+For the hackathon-only credentials, run:
+
+```bash
+python scripts/seed_demo_auth_users.py --demo-passwords
+```
+
+It creates/updates:
+
+| Role | Email | Demo password |
+|---|---|---|
+| Customer | `customer@resolvex.demo` | `ResolveX@Customer26` |
+| Ops | `ops@resolvex.demo` | `ResolveX@Ops26` |
+| Partner | `partner@resolvex.demo` | `ResolveX@Partner26` |
+| Support | `support@resolvex.demo` | `ResolveX@Support26` |
+| Admin | `admin@resolvex.demo` | `ResolveX@Admin26` |
+
+These passwords are intentionally public demo credentials. Do not use them for production.
+
+For custom passwords, omit `--demo-passwords` and export:
+
+```bash
+export DEMO_CUSTOMER_PASSWORD='...'
+export DEMO_OPS_PASSWORD='...'
+export DEMO_PARTNER_PASSWORD='...'
+export DEMO_SUPPORT_PASSWORD='...'
+export DEMO_ADMIN_PASSWORD='...'
+python scripts/seed_demo_auth_users.py
+```
+
+The script is safe to rerun: existing Auth users are updated rather than duplicated.
+
+## 3. Manual role assignment alternative
+
+If you prefer to create users manually in Supabase **Authentication -> Users**, copy each Auth user UUID and insert a profile from the SQL editor.
 
 ```sql
 insert into public.user_profiles(user_id,email,display_name,role)
@@ -85,7 +131,7 @@ VITE_SUPABASE_ANON_KEY=...
 VITE_API_BASE_URL=http://localhost:8000
 ```
 
-Backend requires a server key (`SUPABASE_SECRET_KEY` or the legacy `SUPABASE_KEY`). Never expose the server key to Vite.
+Backend and the demo-user seeder require a server key (`SUPABASE_SECRET_KEY` or the legacy `SUPABASE_KEY`). Never expose the server key to Vite.
 
 ## 5. Security behavior
 
