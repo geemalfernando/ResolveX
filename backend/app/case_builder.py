@@ -79,8 +79,22 @@ def build_case(
 
     complaint_snapshot = None
     if complaint_type is not None:
+        complaint_row = (
+            sb.table("complaints")
+            .insert(
+                {
+                    "order_id": order_id,
+                    "customer_id": order_row["customer_id"],
+                    "type": complaint_type.value,
+                    "description": description,
+                    "photo_url": photo_url,
+                }
+            )
+            .execute()
+            .data[0]
+        )
         complaint_snapshot = ComplaintSnapshot(
-            id=str(uuid.uuid4()),
+            id=complaint_row["id"],
             type=complaint_type,
             description=description,
             photo_url=photo_url,
