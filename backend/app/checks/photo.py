@@ -26,12 +26,19 @@ PHOTO_PROMPT_TEMPLATE = """You are inspecting a photo a customer submitted with 
 Ordered items:
 {items}
 
+Complaint type: {complaint_type}
+Customer description: {description}
+
 Look at the attached photo and answer:
 1. Do the items visible in the photo match the ordered items (name/type, not exact plating)?
 2. Is there visible damage (spillage, crushed packaging, leaking containers)?
 
 Respond ONLY with JSON matching this shape, no markdown fences, no commentary:
 {{
+  "complaint_supported": true | false | null,
+  "spillage_detected": true | false,
+  "missing_items_possible": ["..."],
+  "confidence": 0.0,
   "match": true | false,
   "detected_items": ["..."],
   "damage_detected": true | false,
@@ -40,6 +47,7 @@ Respond ONLY with JSON matching this shape, no markdown fences, no commentary:
 """
 
 _STUB_RESULT = {
+    "complaint_supported": None,
     "match": None,
     "detected_items": [],
     "damage_detected": False,
@@ -116,7 +124,7 @@ def run(case: Case) -> CheckResult:
         )
 
     expected_items = [item.name for item in case.order.items]
-    prompt = PHOTO_PROMPT_TEMPLATE.format(items="\n".join(f"- {name}" for name in expected_items))
+    prompt = PHOTO_PROMPT_TEMPLATE.format(items="\n".join(f"- {name}" for name in expected_items), complaint_type=case.complaint.type.value, description=case.complaint.description or "No description")
 
     result = _call_gemini_with_timeout(case.complaint.photo_url, prompt)
 
@@ -140,6 +148,10 @@ def run(case: Case) -> CheckResult:
         confidence=0.3 if inconclusive else (0.75 if flagged else 0.9),
         summary=summary,
         details={
+            "complaint_supported": result.get("complaint_supported") if isinstance(result.get("complaint_supported"), bool) else None,
+            "spillage_detected": result.get("spillage_detected") is True,
+            "missing_items_possible": result.get("missing_items_possible", []),
+            "evidence_confidence": result.get("confidence") if isinstance(result.get("confidence"), (int, float)) and 0 <= result["confidence"] <= 1 else None,
             "match": result.get("match"),
             "expected_items": expected_items,
             "detected_items": result.get("detected_items", []),

@@ -1,64 +1,11 @@
-import { useEffect, useState } from "react";
-
-import { supabase } from "../lib/supabaseClient";
-
-/**
- * Support agent queue: cases whose verdict outcome was SUPPORT_TICKET (low confidence or
- * disputed fault), i.e. the human-in-the-loop cases.
- */
-export default function SupportQueue() {
-  const [tickets, setTickets] = useState([]);
-
-  useEffect(() => {
-    async function loadTickets() {
-      const { data, error } = await supabase
-        .from("support_tickets")
-        .select("*, cases(*)")
-        .order("created_at", { ascending: false });
-      if (!error) setTickets(data ?? []);
-    }
-    loadTickets();
-
-    const channel = supabase
-      .channel("support-tickets-realtime")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "support_tickets" },
-        (payload) => setTickets((prev) => [payload.new, ...prev])
-      )
-      .subscribe();
-
-    return () => supabase.removeChannel(channel);
-  }, []);
-
-  return (
-    <div className="max-w-4xl mx-auto px-4 py-6">
-      <h1 className="text-xl font-bold mb-4">Support queue</h1>
-
-      <div className="space-y-3">
-        {tickets.length === 0 && <p className="text-sm text-slate-400">No open tickets — nice.</p>}
-        {tickets.map((t) => (
-          <div key={t.id} className="rounded-lg border bg-white p-4">
-            <div className="flex justify-between items-start">
-              <div>
-                <div className="font-medium">Case {t.case_id}</div>
-                <div className="text-sm text-slate-500">Status: {t.status}</div>
-              </div>
-              <span className="text-xs rounded-full bg-amber-100 text-amber-800 px-2 py-1">
-                needs review
-              </span>
-            </div>
-            <div className="mt-3 flex gap-2">
-              <button className="rounded-md bg-emerald-600 text-white text-sm px-3 py-1.5">
-                Approve refund
-              </button>
-              <button className="rounded-md bg-slate-200 text-slate-800 text-sm px-3 py-1.5">
-                Deny claim
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
+import { useEffect, useState } from 'react';
+import { api } from '../lib/api';
+import CasePanel from '../components/CasePanel';
+const ACTIONS={confirm:'Confirm AI Verdict',merchant:'Merchant Responsible',rider:'Rider Responsible',neither:'Neither Responsible',request_evidence:'Request More Evidence',approve_refund:'Approve Refund',reject:'Reject Claim'};
+export default function SupportQueue(){
+ const [data,setData]=useState(null),[selected,setSelected]=useState(null),[reason,setReason]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');
+ const load=()=>api('/workflow/ops').then(setData).catch(e=>setError(e.message));useEffect(()=>{load();},[]);
+ async function review(action){setBusy(true);setError('');try{const r=await api(`/cases/${selected.case_id}/support`,{action,reason});setSelected(r);await load();setReason('');}catch(e){setError(e.message);}finally{setBusy(false);}}
+ const tickets=data?.cases.filter(c=>data.support_case_ids.includes(c.case_id))??[];
+ return <div className="max-w-6xl mx-auto p-6"><h1 className="text-2xl font-bold mb-4">Support mediation</h1>{error&&<p role="alert" className="text-red-700">{error}</p>}<div className="grid md:grid-cols-3 gap-5"><aside className="space-y-2">{tickets.length===0&&<p>No open support cases.</p>}{tickets.map(r=><button key={r.case_id} className="block w-full rounded-lg border bg-white p-3 text-left" onClick={()=>{setSelected(r);setReason('');}}><b>Case {r.case_id.slice(0,8)}</b><p className="text-sm">{r.case.complaint?.type??'Proactive incident'}</p><p className="text-xs">{r.case.workflow?.partner?.status==='disputed'?'Partner disputed':'Awaiting review'}</p></button>)}</aside><article className="md:col-span-2 rounded-xl border bg-white p-5">{selected?<><CasePanel record={selected} technical/><label className="block mt-4 font-medium">Decision / override reason<textarea className="field" value={reason} onChange={e=>setReason(e.target.value)} placeholder="Required for an override, rejection or evidence request"/></label><div className="flex flex-wrap gap-2 mt-3">{Object.entries(ACTIONS).map(([a,l])=><button disabled={busy} className="btn-secondary" key={a} onClick={()=>review(a)}>{l}</button>)}</div><p className="mt-3 text-xs text-slate-500">Human decisions are stored as future labelled examples. The model is not retrained during review.</p></>:<p>Select a case to compare customer, merchant and rider evidence.</p>}</article></div></div>;
 }

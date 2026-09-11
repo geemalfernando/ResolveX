@@ -3,6 +3,7 @@ import { NavLink, Route, Routes } from "react-router-dom";
 import CustomerApp from "./pages/CustomerApp.jsx";
 import OpsDashboard from "./pages/OpsDashboard.jsx";
 import PartnerPortal from "./pages/PartnerPortal.jsx";
+import Admin from "./pages/Admin.jsx";
 import SupportQueue from "./pages/SupportQueue.jsx";
 
 const navLinkClass = ({ isActive }) =>
@@ -29,6 +30,7 @@ export default function App() {
             <NavLink to="/support" className={navLinkClass}>
               Support Queue
             </NavLink>
+            <NavLink to="/admin" className={navLinkClass}>Admin</NavLink>
           </nav>
         </div>
       </header>
@@ -38,6 +40,7 @@ export default function App() {
           <Route path="/" element={<CustomerApp />} />
           <Route path="/ops" element={<OpsDashboard />} />
           <Route path="/partner" element={<PartnerPortal />} />
+          <Route path="/admin" element={<Admin />} />
           <Route path="/support" element={<SupportQueue />} />
         </Routes>
       </main>

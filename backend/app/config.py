@@ -30,7 +30,7 @@ class Settings(BaseSettings):
 
     eta_model_path: str = str(Path(__file__).parent / "ml" / "eta_model.joblib")
     fault_model_path: str = str(Path(__file__).parent / "ml" / "fault_model.joblib")
-    auto_action_confidence_threshold: float = 0.85
+    auto_action_confidence_threshold: float = 0.80
 
     support_review_confidence_threshold: float = 0.55
 
