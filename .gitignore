@@ -20,6 +20,7 @@ yarn-error.log*
 
 # Scripts output
 scripts/seed_output/
+backend/app/ml/eta_model.joblib
 
 # Editors / OS
 .vscode/

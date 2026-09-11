@@ -40,6 +40,18 @@ def create_case(body: CreateCaseRequest) -> CaseResponse:
 
     sb = get_supabase()
 
+    if case.complaint:
+        sb.table("complaints").insert(
+            {
+                "id": case.complaint.id,
+                "order_id": case.order.id,
+                "customer_id": case.customer.id,
+                "type": case.complaint.type.value,
+                "description": case.complaint.description,
+                "photo_url": case.complaint.photo_url,
+            }
+        ).execute()
+
     case_row = (
         sb.table("cases")
         .insert(
