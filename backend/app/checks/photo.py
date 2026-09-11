@@ -160,7 +160,7 @@ def run(case: Case) -> CheckResult:
             },
         )
 
-    prompt = PHOTO_PROMPT_TEMPLATE.format(items="\n".join(f"- {name}" for name in expected_items))
+    prompt = PHOTO_PROMPT_TEMPLATE.format(items="\n".join(f"- {name}" for name in expected_items), complaint_type=case.complaint.type.value, description=case.complaint.description or "No description")
     result = _call_gemini(case.complaint.photo_url, prompt)
     source = "gemini"
     if result is None:

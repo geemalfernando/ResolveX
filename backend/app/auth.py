@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable
+from typing import Callable, Optional
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -15,11 +15,11 @@ VALID_ROLES = {"customer", "ops", "partner", "support", "admin"}
 @dataclass(frozen=True)
 class AuthPrincipal:
     user_id: str
-    email: str | None
+    email: Optional[str]
     role: str
-    customer_id: str | None = None
-    merchant_id: str | None = None
-    display_name: str | None = None
+    customer_id: Optional[str] = None
+    merchant_id: Optional[str] = None
+    display_name: Optional[str] = None
 
 
 def _profile_for(user) -> AuthPrincipal:
@@ -90,7 +90,7 @@ def _profile_for(user) -> AuthPrincipal:
 
 
 def current_user(
-    credentials: HTTPAuthorizationCredentials | None = Depends(bearer),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer),
 ) -> AuthPrincipal:
     if credentials is None or credentials.scheme.lower() != "bearer":
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")

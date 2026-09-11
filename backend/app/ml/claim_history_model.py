@@ -11,6 +11,8 @@ from math import exp, log
 from pathlib import Path
 from typing import Any
 
+import logging
+
 import joblib
 import pandas as pd
 
@@ -87,7 +89,11 @@ def _load_bundle() -> dict[str, Any] | None:
         return _bundle
     if not MODEL_PATH.exists():
         return None
-    _bundle = joblib.load(MODEL_PATH)
+    try:
+        _bundle = joblib.load(MODEL_PATH)
+    except Exception:
+        logging.getLogger(__name__).exception("Claim-risk model unavailable; using the explicit rule fallback")
+        return None
     return _bundle
 
 
