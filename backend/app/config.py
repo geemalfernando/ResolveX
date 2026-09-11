@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     supabase_secret_key: str = ""
     supabase_jwks_url: str = ""
     gemini_api_key: str = ""
+    photo_use_gemini: bool = True
+    aggregator_use_gemini: bool = True
 
     # ZONE check: fraction of open orders in a zone that must be late to flag zone-wide delay
     zone_late_ratio_threshold: float = 0.30
@@ -30,7 +32,7 @@ class Settings(BaseSettings):
 
     eta_model_path: str = str(Path(__file__).parent / "ml" / "eta_model.joblib")
     fault_model_path: str = str(Path(__file__).parent / "ml" / "fault_model.joblib")
-    auto_action_confidence_threshold: float = 0.85
+    auto_action_confidence_threshold: float = 0.80
 
     # Confidence bar for auto-resolving when the trained fault model isn't loaded and the
     # rule-based fallback is deciding instead. Lower than auto_action_confidence_threshold

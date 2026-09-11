@@ -1,53 +1,10 @@
-import { useEffect, useState } from "react";
-
-import { supabase } from "../lib/supabaseClient";
-
-/**
- * Merchant-facing view: complaints tied to this merchant's orders, with a place to respond.
- * TODO: scope the query to the logged-in merchant once Supabase Auth is wired up
- * (filter cases by case_payload->order->merchant->id or a merchant_id column).
- */
-export default function PartnerPortal() {
-  const [cases, setCases] = useState([]);
-
-  useEffect(() => {
-    async function loadCases() {
-      const { data, error } = await supabase
-        .from("cases")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(20);
-      if (!error) setCases(data ?? []);
-    }
-    loadCases();
-  }, []);
-
-  return (
-    <div className="max-w-4xl mx-auto px-4 py-6">
-      <h1 className="text-xl font-bold mb-4">Complaints on your orders</h1>
-
-      <div className="space-y-3">
-        {cases.length === 0 && <p className="text-sm text-slate-400">No complaints yet.</p>}
-        {cases.map((c) => (
-          <div key={c.id} className="rounded-lg border bg-white p-4">
-            <div className="flex justify-between items-start">
-              <div>
-                <div className="font-medium">Order {c.order_id}</div>
-                <div className="text-sm text-slate-500">{c.trigger}</div>
-              </div>
-              <span className="text-xs rounded-full bg-slate-100 px-2 py-1">{c.status}</span>
-            </div>
-            <textarea
-              placeholder="Respond to this complaint..."
-              rows={2}
-              className="mt-3 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-            />
-            <button className="mt-2 rounded-md bg-slate-900 text-white text-sm px-3 py-1.5">
-              Send response
-            </button>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
+import { useEffect, useState } from 'react';
+import { api } from '../lib/api';
+import CasePanel from '../components/CasePanel';
+export default function PartnerPortal(){
+ const [records,setRecords]=useState([]),[tab,setTab]=useState('Needs Response'),[reasons,setReasons]=useState({}),[error,setError]=useState(''),[busy,setBusy]=useState(false);
+ const load=()=>api('/workflow/cases').then(setRecords).catch(e=>setError(e.message));useEffect(()=>{load();},[]);
+ async function respond(id,action){setBusy(true);setError('');try{await api(`/cases/${id}/partner`,{action,reason:reasons[id]??''});await load();}catch(e){setError(e.message);}finally{setBusy(false);}}
+ const status=r=>r.case.workflow?.partner?.status==='disputed'?'Disputed':r.status==='resolved'||r.case.workflow?.partner?.status==='accepted'?'Resolved':'Needs Response';
+ return <div className="max-w-5xl mx-auto p-6"><h1 className="text-2xl font-bold">Partner response center</h1><div className="flex gap-2 my-4">{['Needs Response','Resolved','Disputed'].map(t=><button className={tab===t?'btn':'btn-secondary'} key={t} onClick={()=>setTab(t)}>{t}</button>)}</div>{error&&<p role="alert" className="text-red-700">{error}</p>}<div className="grid md:grid-cols-2 gap-4">{records.filter(r=>r.verdict&&status(r)===tab).map(r=><article key={r.case_id} className="rounded-xl border bg-white p-5"><CasePanel record={r}/><label className="block mt-4">Response / dispute reason<textarea className="field" value={reasons[r.case_id]??''} onChange={e=>setReasons({...reasons,[r.case_id]:e.target.value})}/></label><div className="flex gap-2 mt-3"><button disabled={busy} className="btn" onClick={()=>respond(r.case_id,'accept')}>Accept verdict</button><button disabled={busy||!reasons[r.case_id]?.trim()} className="btn-secondary" onClick={()=>respond(r.case_id,'dispute')}>Submit dispute</button></div></article>)}</div></div>;
 }

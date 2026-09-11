@@ -6,7 +6,7 @@ from .ml.eta_model import eta_model
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import get_settings
-from .routers import aggregator, cases, checks, orders
+from .routers import aggregator, cases, checks, orders, workflow, demo
 
 settings = get_settings()
 
@@ -14,7 +14,9 @@ settings = get_settings()
 async def lifespan(app: FastAPI):
     eta_model.load(settings.eta_model_path)
     fault_model.load(settings.fault_model_path)
+    demo.start_worker()
     yield
+    demo.STOP.set()
 
 
 app = FastAPI(title="ResolveX API", version="0.1.0", lifespan=lifespan)
@@ -37,6 +39,8 @@ app.include_router(cases.router)
 app.include_router(checks.router)
 app.include_router(aggregator.router)
 app.include_router(orders.router)
+app.include_router(workflow.router)
+app.include_router(demo.router)
 
 
 @app.get("/health")

@@ -122,7 +122,7 @@ create table if not exists public.verdicts (
   id uuid primary key default gen_random_uuid(),
   case_id uuid not null unique references public.cases(id) on delete cascade,
   claim_valid boolean not null,
-  fault_party text not null check (fault_party in ('merchant', 'rider', 'external', 'neither', 'customer_abuse')),
+  fault_party text not null check (fault_party in ('merchant', 'rider', 'neither', 'customer_abuse')),
   confidence numeric not null check (confidence >= 0 and confidence <= 1),
   outcome text not null check (outcome in ('NEED_MORE_INFO', 'AUTO_REFUND', 'ZONE_BROADCAST', 'SUPPORT_TICKET')),
   reasons jsonb not null,

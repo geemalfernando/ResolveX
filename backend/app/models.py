@@ -17,6 +17,8 @@ class ComplaintType(str, Enum):
     wrong_item = "wrong_item"
     damaged = "damaged"
     missing_item = "missing_item"
+    not_delivered = "not_delivered"
+    tampering = "tampering"
 
 
 class CaseTrigger(str, Enum):
@@ -28,9 +30,7 @@ class CaseTrigger(str, Enum):
 class FaultParty(str, Enum):
     merchant = "merchant"
     rider = "rider"
-    external = "external"
     neither = "neither"
-    customer_abuse = "customer_abuse"
 
 
 class Outcome(str, Enum):
@@ -38,6 +38,7 @@ class Outcome(str, Enum):
     auto_refund = "AUTO_REFUND"
     zone_broadcast = "ZONE_BROADCAST"
     support_ticket = "SUPPORT_TICKET"
+    no_action = "NO_ACTION"
 
 
 class CheckName(str, Enum):
@@ -139,6 +140,7 @@ class Case(BaseModel):
     customer_refund_history: list[RefundHistoryEntry] = Field(default_factory=list)
     complaint: Optional[ComplaintSnapshot] = None
     zone_snapshot: ZoneSnapshot
+    workflow: dict[str, Any] = Field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------------
@@ -170,6 +172,8 @@ class VerdictReason(BaseModel):
 
 
 class Verdict(BaseModel):
+    cause_category: Optional[str] = None
+    claim_assessment: dict[str, Any] = Field(default_factory=dict)
     claim_valid: bool
     fault_party: FaultParty
     confidence: float = Field(ge=0.0, le=1.0)
@@ -230,7 +234,7 @@ class CaseResponse(BaseModel):
         settings = get_settings()
         verdict = self.verdict
         level = "High" if verdict.confidence >= settings.auto_action_confidence_threshold else "Moderate" if verdict.confidence >= settings.support_review_confidence_threshold else "Low"
-        return {"prediction": verdict.fault_prediction or verdict.fault_party.value.upper(),
+        return {"prediction": self.case.workflow.get("human_verdict", verdict.fault_party.value.upper()), "cause_category": verdict.cause_category,
                 "confidence": verdict.confidence, "confidence_level": level,
                 "model_used": verdict.model_used, "class_probabilities": verdict.class_probabilities,
                 "fallback_reason": verdict.fallback_reason}
@@ -238,4 +242,4 @@ class CaseResponse(BaseModel):
     @computed_field
     @property
     def resolution(self) -> Optional[dict[str, str]]:
-        return {"action": self.verdict.outcome.value} if self.verdict else None
+        return {"action": self.case.workflow.get("resolution_action", self.verdict.outcome.value)} if self.verdict else None
