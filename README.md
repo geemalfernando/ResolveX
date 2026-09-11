@@ -24,7 +24,7 @@ support agent.
                                        |      refund history  --> Case object
                                        |
                                        |--> 5 CHECKS (run in parallel over the Case)
-                                       |      - PHOTO         (AI: Gemini 2.5 Flash, multimodal)
+                                       |      - PHOTO         (AI: Gemini 3.6 Flash, multimodal)
                                        |      - TIMING        (plain code)
                                        |      - RIDER_ROUTE   (plain code geometry)
                                        |      - ZONE          (plain code)

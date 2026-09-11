@@ -1,6 +1,6 @@
 # ResolveX — Fairness Aggregator Contract
 
-The aggregator is a **single Gemini 2.5 Flash call** that takes the aggregator input
+The aggregator is a **single Gemini 3.6 Flash call** that takes the aggregator input
 (section 3 of `case_contract.md`) and must return **strict JSON** matching the schema below.
 The backend enforces this shape with a Pydantic model (`backend/app/aggregator/schema.py`) and
 Gemini's structured output / response schema feature — never free text.

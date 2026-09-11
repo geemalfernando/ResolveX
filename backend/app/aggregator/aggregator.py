@@ -1,6 +1,5 @@
-"""Fairness Aggregator — single Gemini 2.5 Flash call + backend post-processing.
+"""Fairness Aggregator — single Gemini 3.6 Flash call + backend post-processing.
 
-STUB: wire up your GEMINI_API_KEY in .env and replace `_call_gemini` below.
 The backend never trusts the model's `outcome` blindly — `_apply_outcome_overrides`
 always re-checks the confidence threshold and fault-dispute rule server-side.
 See docs/aggregator_contract.md.
@@ -9,6 +8,10 @@ See docs/aggregator_contract.md.
 from __future__ import annotations
 
 import json
+import logging
+
+from google import genai
+from google.genai import types
 
 from ..config import get_settings
 from ..models import (
@@ -22,27 +25,39 @@ from ..models import (
 from .prompt import build_prompt
 from .schema import VERDICT_JSON_SCHEMA
 
+logger = logging.getLogger(__name__)
 
-def _call_gemini(prompt: str) -> dict:
-    """
-    TODO: replace with a real call to Gemini 2.5 Flash, e.g.:
 
-        from google import genai
-        client = genai.Client(api_key=get_settings().gemini_api_key)
+def _call_gemini(prompt: str) -> dict | None:
+    """Calls Gemini 3.6 Flash with the aggregator prompt and parses its JSON verdict.
+    Returns None (falls back to the heuristic stub) if the call or parsing fails, so a
+    flaky/rate-limited Gemini call never crashes the /cases pipeline mid-demo."""
+    settings = get_settings()
+    client = genai.Client(api_key=settings.gemini_api_key)
+
+    try:
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model="gemini-3.6-flash",
             contents=prompt,
-            config={
-                "response_mime_type": "application/json",
-                "response_schema": VERDICT_JSON_SCHEMA,
-            },
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                response_schema=VERDICT_JSON_SCHEMA,
+            ),
         )
         return json.loads(response.text)
+    except Exception:
+        logger.warning("Aggregator call with response_schema failed, retrying without it", exc_info=True)
 
-    Left as a stub so the rest of the pipeline runs end-to-end before the Gemini key
-    is wired up. Returns a plausible placeholder verdict derived from which checks flagged.
-    """
-    return None  # signals the caller to fall back to the heuristic stub below
+    try:
+        response = client.models.generate_content(
+            model="gemini-3.6-flash",
+            contents=prompt,
+            config=types.GenerateContentConfig(response_mime_type="application/json"),
+        )
+        return json.loads(response.text)
+    except Exception:
+        logger.exception("Aggregator Gemini call failed; falling back to heuristic stub verdict")
+        return None
 
 
 def _heuristic_stub_verdict(payload: AggregatorInput) -> dict:

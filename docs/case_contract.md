@@ -136,7 +136,7 @@ Every check returns this common envelope; `details` is check-specific.
 }
 ```
 
-### photo.details (Gemini 2.5 Flash multimodal call)
+### photo.details (Gemini 3.6 Flash multimodal call)
 ```jsonc
 {
   "match": false,
