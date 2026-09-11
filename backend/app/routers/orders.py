@@ -73,6 +73,21 @@ def flag_late(order_id: str, body: FlagLateBody) -> dict:
     return result.data[0]
 
 
+@router.get("/{order_id}/broadcasts")
+def get_order_broadcasts(order_id: str) -> list[dict]:
+    """Zone-wide delay notices sent to this order's customer (see ZONE_BROADCAST in cases.py)."""
+    sb = get_supabase()
+    return (
+        sb.table("zone_broadcasts")
+        .select("*")
+        .eq("order_id", order_id)
+        .order("created_at", desc=True)
+        .execute()
+        .data
+        or []
+    )
+
+
 @router.get("/zones/{zone_id}/stats")
 def zone_stats(zone_id: str) -> dict:
     sb = get_supabase()

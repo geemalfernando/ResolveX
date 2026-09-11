@@ -43,14 +43,25 @@ def run_aggregator(payload: AggregatorInput) -> Verdict:
              and checks.get(CheckName.rider_route) and checks[CheckName.rider_route].flagged)
         or bool(photo and photo.flagged and history and history.flagged)
     )
+    # Rule-based fallback confidences (see _rule_fallback) aren't on the same scale as the
+    # trained model's calibrated probabilities, so they're compared against their own,
+    # lower bar — this is what lets an unambiguous zone-wide delay (EXTERNAL, 0.8) still
+    # reach ZONE_BROADCAST when the model isn't loaded, without loosening anything for
+    # weaker single-signal guesses (MERCHANT/RIDER at 0.55 still fall through to a ticket).
+    auto_action_threshold = (
+        settings.auto_action_confidence_threshold
+        if inference["model_used"]
+        else settings.rule_fallback_confidence_threshold
+    )
+
     # Constraints never overwrite the classifier's prediction or probability.
     if photo_missing:
         outcome = Outcome.need_more_info
-    elif not inference["model_used"] or disputed or photo_inconclusive or risk >= 0.5:
+    elif disputed or photo_inconclusive or risk >= 0.5:
         outcome = Outcome.support_ticket
     elif confidence < settings.support_review_confidence_threshold:
         outcome = Outcome.need_more_info
-    elif confidence < settings.auto_action_confidence_threshold or prediction == "NEITHER":
+    elif confidence < auto_action_threshold or prediction == "NEITHER":
         outcome = Outcome.support_ticket
     elif prediction == "EXTERNAL":
         outcome = Outcome.zone_broadcast

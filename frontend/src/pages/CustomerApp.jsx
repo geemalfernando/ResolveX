@@ -29,6 +29,8 @@ export default function CustomerApp() {
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
+  const [broadcasts, setBroadcasts] = useState([]);
+  const [checkingBroadcasts, setCheckingBroadcasts] = useState(false);
 
   useEffect(() => {
     const caseId = new URLSearchParams(window.location.search).get("case");
@@ -44,6 +46,20 @@ export default function CustomerApp() {
       .catch((err) => { if (err.name !== "AbortError") setError(err.message); });
     return () => controller.abort();
   }, []);
+
+  async function handleCheckBroadcasts() {
+    if (!orderId) return;
+    setCheckingBroadcasts(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/orders/${encodeURIComponent(orderId)}/broadcasts`);
+      if (!res.ok) throw new Error(`Could not check for delay notices (${res.status})`);
+      setBroadcasts(await res.json());
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setCheckingBroadcasts(false);
+    }
+  }
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -100,14 +116,32 @@ export default function CustomerApp() {
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label className="block text-sm font-medium mb-1">Order ID</label>
-          <input
-            required
-            value={orderId}
-            onChange={(e) => setOrderId(e.target.value)}
-            placeholder="paste the order id"
-            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-          />
+          <div className="flex gap-2">
+            <input
+              required
+              value={orderId}
+              onChange={(e) => setOrderId(e.target.value)}
+              placeholder="paste the order id"
+              className="flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm"
+            />
+            <button
+              type="button"
+              onClick={handleCheckBroadcasts}
+              disabled={!orderId || checkingBroadcasts}
+              className="rounded-md border border-slate-300 px-3 py-2 text-xs font-medium text-slate-600 disabled:opacity-50 whitespace-nowrap"
+            >
+              {checkingBroadcasts ? "Checking..." : "Check delays"}
+            </button>
+          </div>
         </div>
+
+        {broadcasts.length > 0 && (
+          <div className="rounded-md bg-amber-50 border border-amber-200 text-amber-800 text-sm px-3 py-2">
+            {broadcasts.map((b) => (
+              <div key={b.id}>{b.message}</div>
+            ))}
+          </div>
+        )}
 
         <div>
           <label className="block text-sm font-medium mb-1">What happened?</label>

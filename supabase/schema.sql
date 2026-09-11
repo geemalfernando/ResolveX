@@ -142,6 +142,20 @@ create table if not exists public.support_tickets (
 
 create index if not exists support_tickets_status_idx on public.support_tickets(status);
 
+create table if not exists public.zone_broadcasts (
+  id uuid primary key default gen_random_uuid(),
+  case_id uuid not null references public.cases(id) on delete cascade,
+  zone_id text not null,
+  order_id uuid not null references public.orders(id),
+  customer_id uuid not null references public.customers(id),
+  message text not null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists zone_broadcasts_zone_id_idx on public.zone_broadcasts(zone_id);
+create index if not exists zone_broadcasts_order_id_idx on public.zone_broadcasts(order_id);
+create index if not exists zone_broadcasts_customer_id_idx on public.zone_broadcasts(customer_id);
+
 create or replace function public.set_cases_updated_at()
 returns trigger
 language plpgsql
@@ -194,6 +208,12 @@ begin
     where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'support_tickets'
   ) then
     alter publication supabase_realtime add table public.support_tickets;
+  end if;
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'zone_broadcasts'
+  ) then
+    alter publication supabase_realtime add table public.zone_broadcasts;
   end if;
 end;
 $$;

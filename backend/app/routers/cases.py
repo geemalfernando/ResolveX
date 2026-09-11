@@ -131,6 +131,44 @@ def create_case(body: CreateCaseRequest) -> CaseResponse:
     if verdict.outcome == Outcome.support_ticket:
         sb.table("support_tickets").insert({"case_id": case.case_id, "status": "open"}).execute()
 
+    if verdict.outcome == Outcome.zone_broadcast:
+        zone_id = case.order.zone_id
+        open_orders = (
+            sb.table("orders")
+            .select("id, customer_id")
+            .eq("zone_id", zone_id)
+            .in_("status", ["placed", "preparing", "ready", "picked_up"])
+            .execute()
+            .data
+            or []
+        )
+        message = (
+            "Heads up - deliveries in your area are running behind due to a zone-wide delay. "
+            "We're on it and your order is still on the way."
+        )
+        broadcast_rows = [
+            {
+                "case_id": case.case_id,
+                "zone_id": zone_id,
+                "order_id": o["id"],
+                "customer_id": o["customer_id"],
+                "message": message,
+            }
+            for o in open_orders
+        ]
+        if broadcast_rows:
+            try:
+                sb.table("zone_broadcasts").insert(broadcast_rows).execute()
+            except APIError as exc:
+                migration_needed = exc.code == "42P01" and "zone_broadcasts" in exc.message
+                detail = (
+                    "Verdict computed, but the zone-wide broadcast could not be sent. "
+                    "Apply supabase/migrations/20260912_zone_broadcasts.sql."
+                    if migration_needed
+                    else "Verdict computed, but the zone-wide broadcast could not be sent."
+                )
+                raise HTTPException(status_code=503, detail=detail, headers={"X-Case-ID": case.case_id}) from exc
+
     sb.table("cases").update({"status": "aggregated"}).eq("id", case.case_id).execute()
 
     del case_row  # response id already known; row insert result unused beyond error surfacing
