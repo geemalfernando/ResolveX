@@ -8,8 +8,9 @@ from .config import get_settings
 @lru_cache
 def get_supabase() -> Client:
     settings = get_settings()
-    if not settings.supabase_url or not settings.supabase_key:
+    supabase_key = settings.supabase_secret_key or settings.supabase_key
+    if not settings.supabase_url or not supabase_key:
         raise RuntimeError(
-            "SUPABASE_URL / SUPABASE_KEY are not set. Copy .env.example to .env and fill them in."
+            "SUPABASE_URL / SUPABASE_SECRET_KEY are not set. Copy .env.example to .env and fill them in."
         )
-    return create_client(settings.supabase_url, settings.supabase_key)
+    return create_client(settings.supabase_url, supabase_key)
