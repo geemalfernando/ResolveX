@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { api } from "../lib/api";
+import { api, uploadApi } from "../lib/api";
 
 const STATUS = {
   placed: { label: "Needs approval", tone: "bg-amber-50 text-amber-900 ring-amber-200" },
@@ -42,6 +42,34 @@ function orderTotal(order) {
 function StatusBadge({ status }) {
   const meta = STATUS[status] ?? { label: status, tone: "bg-slate-100 text-slate-700 ring-slate-200" };
   return <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-semibold ring-1 ${meta.tone}`}>{meta.label}</span>;
+}
+
+function EvidenceSlot({ label, hint, kind, capture, photo, disabled, onUploaded }) {
+  const [busy, setBusy] = useState(false);
+  async function choose(event) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setBusy(true);
+    try {
+      await onUploaded(kind, file);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
+      <p className="mt-1 text-sm text-slate-600">{hint}</p>
+      {photo?.signed_url && (
+        <img src={photo.signed_url} alt={label} className="mt-3 max-h-40 w-full rounded-xl object-cover" />
+      )}
+      <label className="btn-secondary mt-3 inline-flex cursor-pointer">
+        {busy ? "Uploading…" : photo ? "Replace photo" : "Take or upload photo"}
+        <input className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" capture={capture} disabled={disabled || busy} onChange={choose} />
+      </label>
+    </div>
+  );
 }
 
 export default function OrderDashboard({ mode = "customer" }) {
@@ -127,7 +155,24 @@ export default function OrderDashboard({ mode = "customer" }) {
 
   const selected = filtered.find((o) => o.id === selectedId) || filtered[0];
   const delivery = selected?.items?.[0]?.delivery;
+  const payment = selected?.items?.[0]?.payment;
   const assignedRider = riders.find((r) => r.id === selected?.rider_id);
+  const evidence = selected?.evidence || {};
+
+  async function uploadEvidence(order, kind, file) {
+    setError("");
+    const form = new FormData();
+    form.append("file", file);
+    form.append("kind", kind);
+    try {
+      const saved = await uploadApi(`/commerce/orders/${order.id}/evidence`, form);
+      setOrders((current) => current.map((row) => (row.id === order.id ? { ...row, evidence: saved.evidence || { ...row.evidence, [kind]: saved } } : row)));
+      setNotice(`${kind === "packing" ? "Packing" : "Handover"} photo saved.`);
+    } catch (e) {
+      setError(e.message);
+      throw e;
+    }
+  }
 
   async function act(order, action) {
     setBusy(true);
@@ -241,6 +286,24 @@ export default function OrderDashboard({ mode = "customer" }) {
                     <li className="flex justify-between py-2 text-sm font-bold"><span>Total</span><span>LKR {orderTotal(selected).toLocaleString()}</span></li>
                   </ul>
 
+                  {payment?.status === "captured" && (
+                    <div className="rounded-2xl border border-teal-100 bg-teal-50/60 p-4 text-sm">
+                      <p className="text-[11px] uppercase tracking-wide text-teal-800">ResolveX Pay</p>
+                      <p className="mt-1 font-semibold text-slate-950">Paid · {payment.account || `${payment.brand || "Card"} ••${payment.last4 || "••••"}`}</p>
+                      <p className="mt-1 text-xs text-slate-500">Refunds from claims go back to this account.</p>
+                    </div>
+                  )}
+                  {payment?.status === "pending" && mode === "customer" && (
+                    <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm">
+                      <p className="font-semibold text-amber-950">Payment pending</p>
+                      <p className="mt-1 text-amber-800">Pay on the ResolveX Pay gateway to send this order to the kitchen.</p>
+                      <Link to={`/pay/${selected.id}`} className="btn mt-3">Open payment gateway</Link>
+                    </div>
+                  )}
+                  {payment?.status === "pending" && mode === "merchant" && (
+                    <p className="rounded-2xl bg-amber-50 p-3 text-sm text-amber-800">Waiting for the customer to pay on ResolveX Pay.</p>
+                  )}
+
                   {delivery && (
                     <div className="rounded-2xl bg-slate-50 p-4 text-sm">
                       <p className="text-[11px] uppercase tracking-wide text-slate-500">Customer details</p>
@@ -264,21 +327,39 @@ export default function OrderDashboard({ mode = "customer" }) {
 
                   {mode === "merchant" && selected.status === "placed" && (
                     <div className="flex flex-wrap gap-2">
-                      <button className="btn" disabled={busy} onClick={() => act(selected, "accept")}>Approve & prepare</button>
+                      <button className="btn" disabled={busy || payment?.status !== "captured"} onClick={() => act(selected, "accept")}>Approve & prepare</button>
                       <button className="btn-secondary" disabled={busy} onClick={() => act(selected, "reject")}>Decline order</button>
                     </div>
                   )}
 
                   {mode === "merchant" && selected.status === "preparing" && (
-                    <button className="btn" disabled={busy} onClick={() => act(selected, "pack")}>Mark packed & auto-assign rider</button>
+                    <div className="space-y-3">
+                      <EvidenceSlot
+                        label="Packing photo"
+                        hint="Required before the order can be marked packed."
+                        kind="packing"
+                        capture="environment"
+                        photo={evidence.packing}
+                        disabled={busy}
+                        onUploaded={(kind, file) => uploadEvidence(selected, kind, file)}
+                      />
+                      <button className="btn" disabled={busy || !evidence.packing} onClick={() => act(selected, "pack")}>
+                        Mark packed & auto-assign rider
+                      </button>
+                    </div>
                   )}
 
                   {mode === "merchant" && selected.status === "ready" && (
-                    <div className="rounded-2xl border border-slate-200 p-4">
+                    <div className="space-y-3">
+                      {evidence.packing?.signed_url && (
+                        <img src={evidence.packing.signed_url} alt="Packing photo" className="max-h-40 w-full rounded-2xl object-cover" />
+                      )}
+                      <div className="rounded-2xl border border-slate-200 p-4">
                       <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Assigned rider</p>
                       <p className="mt-1 font-semibold">{assignedRider?.name || (selected.rider_id ? "Assigned rider" : "Waiting for rider")}</p>
                       {assignedRider && <p className="text-sm capitalize text-slate-500">{assignedRider.vehicle} · {assignedRider.zone_id}</p>}
                       <button className="btn mt-3" disabled={busy || !selected.rider_id} onClick={() => act(selected, "handover")}>Hand over order</button>
+                    </div>
                     </div>
                   )}
 
@@ -290,7 +371,18 @@ export default function OrderDashboard({ mode = "customer" }) {
                   )}
 
                   {mode === "rider" && selected.status === "picked_up" && (
-                    <button disabled={busy} className="btn" onClick={() => act(selected, "deliver")}>Confirm delivery</button>
+                    <div className="space-y-3">
+                      <EvidenceSlot
+                        label="Handover photo"
+                        hint="Take a photo of the sealed order before confirming delivery."
+                        kind="handover"
+                        capture="environment"
+                        photo={evidence.handover}
+                        disabled={busy}
+                        onUploaded={(kind, file) => uploadEvidence(selected, kind, file)}
+                      />
+                      <button disabled={busy || !evidence.handover} className="btn" onClick={() => act(selected, "deliver")}>Confirm delivery</button>
+                    </div>
                   )}
                 </div>
               </>

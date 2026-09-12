@@ -285,7 +285,7 @@ export default function ClaimRiskBoard() {
                     <p className="text-[11px] uppercase tracking-wide text-slate-500">Refund</p>
                     <p className="font-semibold">
                       {refund
-                        ? `LKR ${Number(refund.amount).toLocaleString()} · ${refund.status === "completed" ? "issued instantly" : refund.status}`
+                        ? `LKR ${Number(refund.amount).toLocaleString()} · ${refund.status === "completed" ? "issued instantly" : refund.status}${refund.destination || refund.account ? ` to ${refund.destination || refund.account}` : ""}`
                         : selected.needsReview
                           ? "Held"
                           : "Not issued"}

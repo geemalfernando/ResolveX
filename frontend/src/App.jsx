@@ -5,6 +5,7 @@ import Storefront from "./pages/Storefront.jsx";
 import Signup from "./pages/Signup.jsx";
 import RiderSignup from "./pages/RiderSignup.jsx";
 import OrderDashboard from "./pages/OrderDashboard.jsx";
+import PayGateway from "./pages/PayGateway.jsx";
 import CustomerApp from "./pages/CustomerApp.jsx";
 import OpsDashboard from "./pages/OpsDashboard.jsx";
 import PartnerPortal from "./pages/PartnerPortal.jsx";
@@ -143,6 +144,7 @@ export default function App() {
           <Route path="/signup" element={<Signup />} />
           <Route path="/rider-signup" element={<RiderSignup />} />
           <Route path="/my-orders" element={<ProtectedRoute allowedRoles={["customer"]}><OrderDashboard key="customer" /></ProtectedRoute>} />
+          <Route path="/pay/:orderId" element={<ProtectedRoute allowedRoles={["customer"]}><PayGateway /></ProtectedRoute>} />
           <Route path="/report" element={<ProtectedRoute allowedRoles={["customer", "admin"]}><CustomerApp /></ProtectedRoute>} />
           <Route path="/merchant" element={<ProtectedRoute allowedRoles={["partner", "admin"]}><OrderDashboard key="merchant" mode="merchant" /></ProtectedRoute>} />
           <Route path="/rider" element={<ProtectedRoute allowedRoles={["rider", "admin"]}><OrderDashboard key="rider" mode="rider" /></ProtectedRoute>} />

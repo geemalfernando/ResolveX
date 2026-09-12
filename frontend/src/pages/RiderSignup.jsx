@@ -5,13 +5,12 @@ import { supabase } from "../lib/supabaseClient";
 
 export default function RiderSignup() {
   const navigate = useNavigate();
-  const [form, setForm] = useState({
+    const [form, setForm] = useState({
     name: "",
     email: "",
     password: "",
     phone: "",
     vehicle: "bike",
-    zone_id: "ZONE_A",
     lat: "",
     lng: "",
   });
@@ -55,7 +54,6 @@ export default function RiderSignup() {
         password: form.password,
         phone: form.phone.trim(),
         vehicle: form.vehicle,
-        zone_id: form.zone_id.trim(),
         lat: form.lat ? Number(form.lat) : null,
         lng: form.lng ? Number(form.lng) : null,
       });
@@ -118,7 +116,7 @@ export default function RiderSignup() {
               Password
               <input required minLength={12} type="password" className="field" autoComplete="new-password" value={form.password} onChange={(e) => update("password", e.target.value)} placeholder="At least 12 characters" />
             </label>
-            <label className="text-sm font-semibold text-slate-700">
+            <label className="text-sm font-semibold text-slate-700 sm:col-span-2">
               Vehicle
               <select className="field" value={form.vehicle} onChange={(e) => update("vehicle", e.target.value)}>
                 <option value="bike">Bike</option>
@@ -126,17 +124,13 @@ export default function RiderSignup() {
                 <option value="car">Car</option>
               </select>
             </label>
-            <label className="text-sm font-semibold text-slate-700">
-              Delivery zone
-              <input required className="field" value={form.zone_id} onChange={(e) => update("zone_id", e.target.value)} placeholder="ZONE_A" />
-            </label>
           </div>
 
           <div className="mt-5 rounded-2xl bg-slate-50 p-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-bold text-slate-900">Current location</p>
-                <p className="text-xs text-slate-500">Used to rank nearby rider assignments.</p>
+                <p className="text-xs text-slate-500">Your delivery zone is assigned from this pin. You do not choose a zone.</p>
               </div>
               <button type="button" className="btn-secondary" onClick={useLocation} disabled={locating}>
                 {locating ? "Getting location…" : "Use my location"}

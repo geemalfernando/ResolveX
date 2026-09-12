@@ -16,15 +16,18 @@ from .models import (
     ComplaintSnapshot,
     ComplaintType,
     CustomerSnapshot,
+    DeliveryEvidence,
     GpsPoint,
     MerchantSnapshot,
     OrderItem,
     OrderSnapshot,
     OrderTimestamps,
+    PaymentSnapshot,
     RefundHistoryEntry,
     RiderSnapshot,
     ZoneSnapshot,
 )
+from .payments import payment_from_order
 
 
 _timestamp = TypeAdapter(datetime)
@@ -68,6 +71,7 @@ def build_case(
     delivery = (order_row.get("items") or [{}])[0].get("delivery")
     if delivery:
         customer_row = {**customer_row, **{k: delivery[k] for k in ("address", "lat", "lng")}}
+    saved_payment = payment_from_order(order_row)
 
     rider_row = None
     gps_rows = []
@@ -91,6 +95,14 @@ def build_case(
     )
     refund_rows = refund_result.data or []
 
+    photos = {}
+    try:
+        from .evidence import evidence_payload
+        photos = evidence_payload(order_id)
+    except Exception:
+        photos = {}
+    claim_path = (photos.get("claim") or {}).get("path") or photo_url
+
     complaint_snapshot = None
     if complaint_type is not None:
         # NOTE: the complaint row itself is persisted by routers/cases.py::create_case
@@ -100,7 +112,7 @@ def build_case(
             id=str(uuid.uuid4()),
             type=complaint_type,
             description=description,
-            photo_url=photo_url,
+            photo_url=claim_path or photo_url,
         )
 
     return Case(
@@ -150,5 +162,14 @@ def build_case(
             for r in refund_rows
         ],
         complaint=complaint_snapshot,
+        evidence=DeliveryEvidence(
+            packing_path=(photos.get("packing") or {}).get("path"),
+            handover_path=(photos.get("handover") or {}).get("path"),
+            claim_path=claim_path,
+            packing_url=(photos.get("packing") or {}).get("signed_url"),
+            handover_url=(photos.get("handover") or {}).get("signed_url"),
+            claim_url=(photos.get("claim") or {}).get("signed_url"),
+        ),
         zone_snapshot=_zone_snapshot(order_row["zone_id"]),
+        payment=PaymentSnapshot.model_validate(saved_payment) if saved_payment else None,
     )

@@ -5,11 +5,13 @@ from math import asin, cos, radians, sin, sqrt
 from typing import Optional, Literal
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, Field, TypeAdapter
 
 from ..auth import AuthPrincipal, current_user, require_roles
-from ..db import get_supabase
+from ..db import get_supabase, rider_geo_available, rider_select_columns
+from ..evidence import evidence_for_orders, evidence_payload, has_evidence, save_upload
+from ..payments import PaymentError, charge, charge_demo, is_captured, payment_from_order, pending
 from .. import workflows as wf
 
 router = APIRouter(prefix='/commerce', tags=['commerce'])
@@ -34,7 +36,8 @@ def _distance_km(lat1, lng1, lat2, lng2):
 
 def _active_rider_loads():
     loads = {}
-    for order in wf.rows('orders'):
+    orders = get_supabase().table('orders').select('rider_id,status').execute().data or []
+    for order in orders:
         if order.get('rider_id') and order.get('status') in ('ready', 'picked_up'):
             loads[order['rider_id']] = loads.get(order['rider_id'], 0) + 1
     return loads
@@ -44,7 +47,7 @@ def _pick_nearby_rider(order, exclude_ids=None):
     exclude_ids = set(exclude_ids or [])
     sb = get_supabase()
     merchant = sb.table('merchants').select('lat,lng,zone_id').eq('id', order['merchant_id']).single().execute().data
-    riders = sb.table('riders').select('id,name,vehicle,zone_id,lat,lng,last_location_at').eq('zone_id', order['zone_id']).execute().data or []
+    riders = sb.table('riders').select(rider_select_columns(sb)).eq('zone_id', order['zone_id']).execute().data or []
     riders = [r for r in riders if r['id'] not in exclude_ids]
     if not riders:
         return None
@@ -98,6 +101,13 @@ class CartItem(BaseModel):
     qty: int = Field(ge=1, le=20)
 
 
+class DemoCard(BaseModel):
+    holder: str = Field(min_length=2, max_length=80)
+    number: str = Field(min_length=13, max_length=23)
+    expiry: str = Field(min_length=4, max_length=7)
+    cvc: str = Field(min_length=3, max_length=4)
+
+
 class Checkout(BaseModel):
     request_id: UUID
     merchant_id: UUID
@@ -107,6 +117,7 @@ class Checkout(BaseModel):
     lat: float = Field(ge=-90, le=90)
     lng: float = Field(ge=-180, le=180)
     instructions: str = Field(default='', max_length=500)
+    payment: Optional[DemoCard] = None
 
 
 def find_order(order_id):
@@ -164,6 +175,16 @@ def checkout(body: Checkout, principal: AuthPrincipal = Depends(require_roles('c
                     delivery=delivery,
                 )
             )
+        amount = round(sum(line['qty'] * line['price'] for line in items), 2)
+        if body.payment:
+            try:
+                payment = charge(body.payment.holder, body.payment.number, body.payment.expiry, body.payment.cvc, amount)
+            except PaymentError as exc:
+                raise HTTPException(402, exc.message) from exc
+        else:
+            payment = pending(amount)
+        for line in items:
+            line['payment'] = payment
         row = dict(
             id=str(body.request_id),
             merchant_id=merchant['id'],
@@ -178,6 +199,42 @@ def checkout(body: Checkout, principal: AuthPrincipal = Depends(require_roles('c
         )
         sb.table('orders').insert(row).execute()
         return row
+
+
+@router.get('/orders/{order_id}')
+def get_order(order_id: UUID, principal: AuthPrincipal = Depends(current_user)):
+    order = find_order(order_id)
+    authorize_order(order, principal)
+    return order
+
+
+class PayOrder(BaseModel):
+    holder: Optional[str] = Field(default=None, max_length=80)
+
+
+@router.post('/orders/{order_id}/pay')
+def pay_order(order_id: UUID, body: Optional[PayOrder] = None, principal: AuthPrincipal = Depends(require_roles('customer'))):
+    with wf.LOCK:
+        order = find_order(order_id)
+        authorize_order(order, principal)
+        existing = payment_from_order(order)
+        if is_captured(existing):
+            return order
+        amount = round(sum(item.get('qty', 0) * item.get('price', 0) for item in order.get('items') or []), 2)
+        holder = (body.holder if body and body.holder else None) or principal.display_name or "Demo Customer"
+        try:
+            payment = charge_demo(amount, holder)
+        except PaymentError as exc:
+            raise HTTPException(402, exc.message) from exc
+        items = order.get('items') or []
+        for line in items:
+            if isinstance(line, dict):
+                line['payment'] = payment
+        result = get_supabase().table('orders').update({'items': items}).eq('id', str(order_id)).execute().data
+        if result:
+            return result[0] if isinstance(result, list) else result
+        order['items'] = items
+        return order
 
 
 @router.get('/orders')
@@ -208,7 +265,11 @@ def my_orders(principal: AuthPrincipal = Depends(current_user)):
     claims = {}
     for case in cases:
         claims.setdefault(case['order_id'], []).append(case['id'])
-    return [dict(o, case_ids=claims.get(o['id'], [])) for o in sorted(rows, key=lambda r: r['placed_at'], reverse=True)]
+    evidence = evidence_for_orders(o["id"] for o in rows)
+    return [
+        dict(o, case_ids=claims.get(o["id"], []), evidence=evidence.get(o["id"], {}))
+        for o in sorted(rows, key=lambda r: r["placed_at"], reverse=True)
+    ]
 
 
 class Stage(BaseModel):
@@ -254,11 +315,16 @@ def stage(order_id: UUID, body: Stage, principal: AuthPrincipal = Depends(requir
         if order['status'] != before:
             raise HTTPException(409, f"Order is {order['status']}; expected {before}")
 
+        if body.action == 'accept' and not is_captured(payment_from_order(order)):
+            raise HTTPException(402, 'Customer payment is still pending')
+
         update = dict(status=after)
         if timestamp:
             update[timestamp] = wf.now()
 
         if body.action == 'pack':
+            if not has_evidence(str(order_id), 'packing'):
+                raise HTTPException(422, 'Upload a packing photo before marking the order packed.')
             rider = _pick_nearby_rider(order)
             update['rider_id'] = rider['id'] if rider else None
 
@@ -274,6 +340,8 @@ def stage(order_id: UUID, body: Stage, principal: AuthPrincipal = Depends(requir
             gps({**order, 'rider_id': assigned_rider_id}, merchant['lat'], merchant['lng'], 0)
 
         if body.action == 'deliver':
+            if not has_evidence(str(order_id), 'handover'):
+                raise HTTPException(422, 'Upload a handover photo before confirming delivery.')
             if body.lat is None or body.lng is None:
                 raise HTTPException(422, 'Delivery location is required')
             gps(order, body.lat, body.lng, 0)
@@ -284,6 +352,33 @@ def stage(order_id: UUID, body: Stage, principal: AuthPrincipal = Depends(requir
         if not result:
             raise HTTPException(409, 'Order changed; refresh and try again')
         return result[0]
+
+
+@router.post('/orders/{order_id}/evidence')
+def upload_order_evidence(
+    order_id: UUID,
+    file: UploadFile = File(...),
+    kind: str = Form(...),
+    principal: AuthPrincipal = Depends(require_roles('customer', 'partner', 'rider', 'support', 'admin')),
+):
+    order = find_order(order_id)
+    authorize_order(order, principal)
+    kind = (kind or '').strip().lower()
+    allowed = {
+        'packing': {'partner', 'admin'},
+        'handover': {'rider', 'admin'},
+        'claim': {'customer', 'support', 'admin'},
+    }
+    if kind not in allowed:
+        raise HTTPException(422, 'Evidence kind must be packing, handover, or claim')
+    if principal.role not in allowed[kind]:
+        raise HTTPException(403, f'Only {", ".join(sorted(allowed[kind]))} can upload the {kind} photo')
+    if kind == 'packing' and order['status'] not in ('preparing', 'ready'):
+        raise HTTPException(409, 'Packing photos are taken while the kitchen is preparing the order')
+    if kind == 'handover' and order['status'] not in ('picked_up', 'dropped_off'):
+        raise HTTPException(409, 'Handover photos are taken after pickup, before or at delivery')
+    saved = save_upload(str(order_id), kind, file, uploaded_by=principal.user_id)
+    return dict(saved, evidence=evidence_payload(str(order_id)))
 
 
 def gps(order, lat, lng, speed):
@@ -312,11 +407,17 @@ def rider_location(body: Position, principal: AuthPrincipal = Depends(require_ro
     rider_id = principal.rider_id
     if principal.role == 'admin' and not rider_id:
         raise HTTPException(422, 'Admin session is not linked to a rider')
-    result = get_supabase().table('riders').update(
-        {'lat': body.lat, 'lng': body.lng, 'last_location_at': wf.now()}
-    ).eq('id', rider_id).execute().data
-    if not result:
-        raise HTTPException(404, 'Rider not found')
+    sb = get_supabase()
+    if rider_geo_available(sb):
+        result = sb.table('riders').update(
+            {'lat': body.lat, 'lng': body.lng, 'last_location_at': wf.now()}
+        ).eq('id', rider_id).execute().data
+        if not result:
+            raise HTTPException(404, 'Rider not found')
+    else:
+        exists = sb.table('riders').select('id').eq('id', rider_id).limit(1).execute().data
+        if not exists:
+            raise HTTPException(404, 'Rider not found')
     return {'saved': True, 'rider_id': rider_id}
 
 
@@ -327,15 +428,18 @@ def position(order_id: UUID, body: Position, principal: AuthPrincipal = Depends(
     if order['status'] != 'picked_up':
         raise HTTPException(409, 'Location updates require an active delivery')
     gps(order, body.lat, body.lng, body.speed_kmh)
-    get_supabase().table('riders').update(
-        {'lat': body.lat, 'lng': body.lng, 'last_location_at': wf.now()}
-    ).eq('id', order['rider_id']).execute()
+    sb = get_supabase()
+    if rider_geo_available(sb):
+        sb.table('riders').update(
+            {'lat': body.lat, 'lng': body.lng, 'last_location_at': wf.now()}
+        ).eq('id', order['rider_id']).execute()
     return {'saved': True}
 
 
 @router.get('/riders')
 def riders(principal: AuthPrincipal = Depends(require_roles('partner', 'admin', 'ops'))):
-    return get_supabase().table('riders').select('id,name,vehicle,zone_id,lat,lng,last_location_at').execute().data or []
+    sb = get_supabase()
+    return sb.table('riders').select(rider_select_columns(sb)).execute().data or []
 
 
 class RiderAccount(BaseModel):

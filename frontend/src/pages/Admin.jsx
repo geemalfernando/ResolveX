@@ -74,7 +74,7 @@ export default function Admin() {
           <div className="mt-3 min-h-0 flex-1 overflow-auto">
             <table className="w-full text-left text-sm">
               <thead className="sticky top-0 bg-white text-xs uppercase text-slate-400">
-                <tr>{["Customer", "Ref", "Amount", "Status"].map((h) => <th className="py-2" key={h}>{h}</th>)}</tr>
+                <tr>{["Customer", "Ref", "Amount", "Paid to", "Status"].map((h) => <th className="py-2" key={h}>{h}</th>)}</tr>
               </thead>
               <tbody>
                 {refunds.map((r) => (
@@ -82,6 +82,7 @@ export default function Admin() {
                     <td className="py-2">{r.customer}</td>
                     <td className="font-mono text-xs">{r.reference}</td>
                     <td>{r.currency} {Number(r.amount).toLocaleString()}</td>
+                    <td className="text-xs">{r.destination || r.account || "ResolveX Pay"}</td>
                     <td className="capitalize">{r.status}</td>
                   </tr>
                 ))}

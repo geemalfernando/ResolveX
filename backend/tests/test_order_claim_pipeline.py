@@ -157,11 +157,13 @@ def test_customer_order_to_claim_analysis_pipeline():
             instructions="Call on arrival",
         )
         created = commerce.checkout(checkout, customer)
+        created = commerce.pay_order(checkout.request_id, commerce.PayOrder(holder="Demo Customer"), customer)
 
         # Pricing is server-authoritative and the delivery snapshot is persisted
         # with the order so later claims use the address that was actually ordered to.
         assert created["items"][0]["price"] == 1250
         assert created["items"][0]["delivery"]["address"] == "12 Colombo Lane"
+        assert created["items"][0]["payment"]["account"] == "Visa ••4242"
         assert created["customer_id"] == customer_id
 
         # Merchant preparation writes every stage timestamp the timing model consumes.
@@ -206,6 +208,7 @@ def test_customer_order_to_claim_analysis_pipeline():
     assert case.customer.lng == 79.8100
     assert len(case.customer_refund_history) == 1
     assert case.complaint is not None and case.complaint.type == ComplaintType.damaged
+    assert case.payment is not None and case.payment.last4 == "4242"
 
     timing_result = timing.run(case)
     route_result = rider_route.run(case)
