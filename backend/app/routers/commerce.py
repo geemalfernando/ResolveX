@@ -1,4 +1,5 @@
 """Customer checkout and authenticated merchant/rider fulfillment."""
+import logging
 from dataclasses import asdict
 from datetime import datetime, timezone
 from math import asin, cos, radians, sin, sqrt
@@ -9,10 +10,18 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, Field, TypeAdapter
 
 from ..auth import AuthPrincipal, current_user, require_roles
-from ..db import get_supabase, rider_geo_available, rider_select_columns
+from ..db import (
+    get_supabase,
+    merchant_ids_with_login,
+    rider_geo_available,
+    rider_ids_with_login,
+    rider_select_columns,
+)
 from ..evidence import evidence_for_orders, evidence_payload, has_evidence, save_upload
 from ..payments import PaymentError, charge, charge_demo, is_captured, payment_from_order, pending
 from .. import workflows as wf
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix='/commerce', tags=['commerce'])
 MENU = [
@@ -49,6 +58,11 @@ def _pick_nearby_rider(order, exclude_ids=None):
     merchant = sb.table('merchants').select('lat,lng,zone_id').eq('id', order['merchant_id']).single().execute().data
     riders = sb.table('riders').select(rider_select_columns(sb)).eq('zone_id', order['zone_id']).execute().data or []
     riders = [r for r in riders if r['id'] not in exclude_ids]
+    # A rider without a login cannot see the assignment or upload the handover
+    # photo, so the delivery would stall silently.
+    with_login = rider_ids_with_login(sb)
+    if with_login is not None:
+        riders = [r for r in riders if str(r['id']) in with_login]
     if not riders:
         return None
 
@@ -87,7 +101,13 @@ def _audit_reassignment(order_id, from_rider_id, to_rider_id, reason):
 
 @router.get('/catalog')
 def catalog():
-    merchants = get_supabase().table('merchants').select('id,name,address,zone_id,avg_prep_minutes').execute().data or []
+    sb = get_supabase()
+    merchants = sb.table('merchants').select('id,name,address,zone_id,avg_prep_minutes').execute().data or []
+    # Only restaurants with a merchant login can accept an order, so ordering
+    # from any other row would leave the customer waiting on nobody.
+    onboarded = merchant_ids_with_login(sb)
+    if onboarded is not None:
+        merchants = [m for m in merchants if str(m['id']) in onboarded]
     return dict(merchants=merchants, products=MENU, currency='LKR')
 
 
@@ -467,4 +487,11 @@ def create_rider(body: RiderAccount, principal: AuthPrincipal = Depends(require_
     except Exception as exc:
         sb.table('riders').delete().eq('id', rid).execute()
         raise HTTPException(400, 'Could not create account. Check the email is unused and the password meets requirements.') from exc
+    profile = dict(user_id=str(user.id), email=body.email, display_name=body.name, role='rider')
+    try:
+        sb.table('user_profiles').upsert({**profile, 'rider_id': rid}, on_conflict='user_id').execute()
+    except Exception:
+        # Login still resolves from trusted auth app_metadata, but auto-assignment
+        # needs the profile row to know this rider can work a delivery.
+        logger.warning('Rider profile row skipped for %s; auto-assignment will not reach them', body.email)
     return dict(rider_id=rid, user_id=user.id)

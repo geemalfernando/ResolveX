@@ -25,6 +25,9 @@ const FLOW = [
   ["04", "Resolve", "Claims combine timing, route, zone, photo, and history signals."],
 ];
 
+// Short lists are easier to browse than to search.
+const BROWSABLE_MERCHANTS = 12;
+
 const TRUST = [
   ["⚡", "Proactive delay detection", "ResolveX can flag late orders before a customer needs to complain."],
   ["📍", "Route evidence", "GPS points help explain detours, long stops, and final drop-off accuracy."],
@@ -68,14 +71,16 @@ export default function Storefront() {
   const products = catalog?.products ?? [];
   const merchants = catalog?.merchants ?? [];
   const selectedMerchant = merchants.find((m) => m.id === basket.merchant);
+  const searchRequired = merchants.length > BROWSABLE_MERCHANTS;
   const filteredMerchants = useMemo(() => {
     const q = query.trim().toLowerCase();
+    if (!q) return searchRequired ? [] : merchants;
     if (q.length < 2) return [];
     return merchants.filter((m) => {
       const { title, note } = merchantParts(m.name);
       return `${title} ${note} ${m.address ?? ""}`.toLowerCase().includes(q);
     });
-  }, [merchants, query]);
+  }, [merchants, query, searchRequired]);
   const showPicker = pickerOpen || !selectedMerchant;
   const categories = useMemo(() => ["all", ...Array.from(new Set(products.map((p) => p.category)))], [products]);
   const visible = products.filter((p) => category === "all" || p.category === category);
@@ -272,7 +277,7 @@ export default function Storefront() {
 
               {showPicker && (
                 <div className="mt-4">
-                  <input className="field" type="search" placeholder="Search by restaurant name" value={query} onChange={(e) => setQuery(e.target.value)} autoComplete="off" />
+                  {searchRequired && <input className="field" type="search" placeholder="Search by restaurant name" value={query} onChange={(e) => setQuery(e.target.value)} autoComplete="off" />}
                   <div className="scroll-pane mt-3 grid max-h-64 gap-2 sm:grid-cols-2">
                     {filteredMerchants.map((m) => {
                       const active = basket.merchant === m.id;
@@ -283,8 +288,9 @@ export default function Storefront() {
                         </button>
                       );
                     })}
-                    {query.trim().length < 2 && <p className="col-span-full py-6 text-center text-sm text-slate-500">Type at least 2 letters to see matching restaurants.</p>}
+                    {searchRequired && query.trim().length < 2 && <p className="col-span-full py-6 text-center text-sm text-slate-500">Type at least 2 letters to see matching restaurants.</p>}
                     {query.trim().length >= 2 && catalog && !filteredMerchants.length && <p className="col-span-full py-6 text-center text-sm text-slate-500">No restaurants match that search.</p>}
+                    {!searchRequired && catalog && !merchants.length && <p className="col-span-full py-6 text-center text-sm text-slate-500">No restaurants are accepting orders yet.</p>}
                   </div>
                 </div>
               )}

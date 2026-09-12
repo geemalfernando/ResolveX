@@ -14,11 +14,20 @@ ResolveX uses **Supabase Auth** for login and the `public.user_profiles` table f
 
 The frontend route guard improves UX, but it is **not** the security boundary. FastAPI validates the Supabase access token and enforces roles again for protected endpoints.
 
-## 1. Apply the RBAC migration
+## 1. Apply the RBAC migrations
 
-Run `supabase/migrations/20260912_rbac_auth.sql` in the Supabase SQL editor or through your normal migration workflow.
+Run these in the Supabase SQL editor, or through your normal migration workflow:
 
-Do not execute the `.sql` file directly in zsh. For a quick local copy:
+1. `supabase/migrations/20260912_rbac_auth.sql` creates `public.user_profiles`.
+2. `supabase/migrations/20260912_rider_profiles.sql` adds `rider_id`, allows the
+   `rider` role, and backfills existing rider logins from auth metadata.
+
+Riders need their profile row because order auto-assignment only offers a
+delivery to a rider who can sign in and upload the handover photo. Until the
+second migration is applied, the server falls back to scanning Supabase auth
+metadata for rider identity.
+
+Do not execute the `.sql` files directly in zsh. For a quick local copy:
 
 ```bash
 pbcopy < supabase/migrations/20260912_rbac_auth.sql
@@ -29,7 +38,7 @@ Paste it into **Supabase -> SQL Editor -> New query -> Run**.
 Verify:
 
 ```sql
-select * from public.user_profiles;
+select role, email, customer_id, merchant_id, rider_id from public.user_profiles;
 ```
 
 ## 2. Seed all five demo login accounts automatically
