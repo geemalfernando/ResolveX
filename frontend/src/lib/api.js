@@ -46,5 +46,5 @@ export async function uploadApi(path, formData) {
 
 export const publicFault = (record) => record.case?.workflow?.human_verdict ?? record.verdict?.fault_party?.toUpperCase() ?? 'PENDING';
 export const faultLabel = (party) => ({MERCHANT:'Merchant responsible', RIDER:'Rider responsible', NEITHER:'Neither party at fault', PENDING:'Analysis pending'}[party] ?? party);
-export const actionLabel = (action) => ({AUTO_REFUND:'Refund approved automatically', NEED_MORE_INFO:'More evidence required', SUPPORT_TICKET:'Needs admin review', ZONE_BROADCAST:'Area delay notice issued', NO_ACTION:'No further action required'}[action] ?? action);
+export const actionLabel = (action) => ({AUTO_REFUND:'Refund approved automatically', NEED_MORE_INFO:'More evidence required', SUPPORT_TICKET:'Support review required', ZONE_BROADCAST:'Area delay notice issued', NO_ACTION:'No further action required'}[action] ?? action);
 export const resolution = (record) => record.case?.workflow?.resolution_action ?? record.verdict?.outcome;
