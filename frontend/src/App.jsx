@@ -16,21 +16,21 @@ import XAssistant from "./components/XAssistant.jsx";
 import { useAuth } from "./auth/AuthContext.jsx";
 
 const NAV = [
-  { to: "/", label: "Shop", icon: "⌂", roles: ["customer", "admin"] },
-  { to: "/my-orders", label: "My orders", icon: "◎", roles: ["customer"] },
-  { to: "/merchant", label: "Restaurant", icon: "◫", roles: ["partner", "admin"] },
-  { to: "/rider", label: "Deliveries", icon: "➜", roles: ["rider", "admin"] },
-  { to: "/ops", label: "Ops", icon: "◈", roles: ["ops", "admin"] },
-  { to: "/partner", label: "Partner", icon: "◇", roles: ["partner", "admin"] },
+  { to: "/", label: "Shop", icon: "⌂", roles: ["customer"] },
+  { to: "/my-orders", label: "Orders", icon: "◎", roles: ["customer"] },
+  { to: "/merchant", label: "Orders", icon: "◫", roles: ["partner"] },
+  { to: "/partner", label: "Claims", icon: "◇", roles: ["partner"] },
+  { to: "/rider", label: "Deliveries", icon: "➜", roles: ["rider"] },
+  { to: "/ops", label: "Live ops", icon: "◈", roles: ["ops", "admin"] },
   { to: "/support", label: "Support", icon: "?", roles: ["support", "admin"] },
-  { to: "/claims", label: "Claim Risk", icon: "⚑", roles: ["support", "admin"] },
+  { to: "/claims", label: "Claim risk", icon: "⚑", roles: ["support", "admin"] },
   { to: "/admin", label: "Admin", icon: "⚙", roles: ["admin"] },
 ];
 
 const ROLE_LABELS = {
   customer: "Customer",
   ops: "Operations",
-  partner: "Merchant partner",
+  partner: "Merchant",
   rider: "Rider",
   support: "Support",
   admin: "Administrator",
@@ -48,11 +48,11 @@ export default function App() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
   const visibleNav = role ? NAV.filter((item) => item.roles.includes(role)) : [];
-  const activeItem = NAV.find((item) => item.to === location.pathname);
+  const activeItem = NAV.find((item) => item.to === location.pathname && (!role || item.roles.includes(role)));
 
   return (
     <div className="app-surface min-h-screen flex flex-col">
-      <header className="sticky top-0 z-40 border-b border-slate-200/70 bg-white/78 backdrop-blur-xl">
+      <header className="sticky top-0 z-40 border-b border-slate-200/70 bg-white/85 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-2.5 sm:px-6">
           <NavLink to="/" className="group flex shrink-0 items-center gap-2" onClick={() => setMobileOpen(false)}>
             <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-slate-950 text-base font-black text-white shadow-lg transition group-hover:-translate-y-0.5 group-hover:rotate-3">
@@ -60,7 +60,6 @@ export default function App() {
             </span>
             <span className="hidden leading-tight sm:block">
               <span className="block text-base font-black tracking-tight text-slate-950">ResolveX</span>
-              <span className="block text-[9px] font-bold uppercase tracking-[0.18em] text-teal-700">Delivery intelligence</span>
             </span>
           </NavLink>
 
@@ -81,9 +80,7 @@ export default function App() {
                 <NavLink to="/login" className="hidden rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-white hover:text-slate-950 sm:inline-flex">
                   Sign in
                 </NavLink>
-                <NavLink to="/signup" className="btn">
-                  Create account
-                </NavLink>
+                <NavLink to="/signup" className="btn">Create account</NavLink>
               </>
             )}
 
@@ -129,10 +126,8 @@ export default function App() {
 
       {user && activeItem && location.pathname !== "/" && (
         <div className="border-b border-slate-200/60 bg-white/45 backdrop-blur">
-          <div className="mx-auto flex max-w-7xl items-center gap-2 px-4 py-2 text-xs text-slate-500 sm:px-6">
-            <span className="font-semibold text-slate-400">ResolveX</span>
-            <span>›</span>
-            <span className="font-semibold text-slate-700">{activeItem.label}</span>
+          <div className="mx-auto max-w-7xl px-4 py-2 text-xs font-semibold text-slate-600 sm:px-6">
+            {activeItem.label}
           </div>
         </div>
       )}
