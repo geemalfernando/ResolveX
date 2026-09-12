@@ -1,3 +1,4 @@
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -10,12 +11,17 @@ from .routers import aggregator, assistant, cases, checks, orders, workflow, dem
 
 settings = get_settings()
 
+# Vercel freezes an instance once it responds, so the polling thread would never
+# tick there no matter how the setting is configured.
+RUN_DEMO_WORKER = settings.enable_demo_worker and not os.environ.get("VERCEL")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     eta_model.load(settings.eta_model_path)
     fault_model.load(settings.fault_model_path)
-    demo.start_worker()
+    if RUN_DEMO_WORKER:
+        demo.start_worker()
     yield
     demo.STOP.set()
 
@@ -34,10 +40,15 @@ configured_origins = [
     if origin.strip()
 ]
 
+origin_patterns = [r"https?://(localhost|127\.0\.0\.1)(:\d+)?"]
+if settings.cors_origin_regex:
+    origin_patterns.append(settings.cors_origin_regex)
+origin_regex = "^(" + "|".join(origin_patterns) + ")$"
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=configured_origins,
-    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
+    allow_origin_regex=origin_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -61,4 +72,5 @@ def health() -> dict:
     return {
         "status": "ok",
         "cors_origins": configured_origins,
+        "cors_origin_regex": origin_regex,
     }

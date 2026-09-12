@@ -298,7 +298,17 @@ def checkout(body: Checkout, principal: AuthPrincipal = Depends(require_roles('c
             promised_delivery_minutes=merchant['avg_prep_minutes'] + 25,
             is_late_flagged=False,
         )
-        sb.table('orders').insert(row).execute()
+        try:
+            sb.table('orders').insert(row).execute()
+        except Exception:
+            # Duplicate submits can both pass the select above when they land on
+            # separate instances, so the primary key decides and the loser returns
+            # the order that won rather than a 500.
+            duplicate = sb.table('orders').select('*').eq('id', str(body.request_id)).execute().data or []
+            if not duplicate:
+                raise
+            authorize_order(duplicate[0], principal)
+            return duplicate[0]
         return row
 
 
