@@ -1,4 +1,5 @@
-import { NavLink, Route, Routes } from "react-router-dom";
+import { useState } from "react";
+import { NavLink, Route, Routes, useLocation } from "react-router-dom";
 
 import Storefront from "./pages/Storefront.jsx";
 import Signup from "./pages/Signup.jsx";
@@ -14,63 +15,129 @@ import ProtectedRoute from "./components/ProtectedRoute.jsx";
 import XAssistant from "./components/XAssistant.jsx";
 import { useAuth } from "./auth/AuthContext.jsx";
 
-const navLinkClass = ({ isActive }) =>
-  `whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium transition ${
-    isActive ? "bg-slate-900 text-white shadow-sm" : "text-slate-600 hover:bg-white/80 hover:text-slate-900"
-  }`;
-
 const NAV = [
-  { to: "/", label: "Shop", roles: ["customer", "admin"] },
-  { to: "/my-orders", label: "My orders", roles: ["customer"] },
-  { to: "/merchant", label: "Restaurant", roles: ["partner", "admin"] },
-  { to: "/rider", label: "Deliveries", roles: ["rider", "admin"] },
-  { to: "/ops", label: "Ops", roles: ["ops", "admin"] },
-  { to: "/partner", label: "Partner", roles: ["partner", "admin"] },
-  { to: "/support", label: "Support", roles: ["support", "admin"] },
-  { to: "/claims", label: "Claim Risk", roles: ["support", "admin"] },
-  { to: "/admin", label: "Admin", roles: ["admin"] },
+  { to: "/", label: "Shop", icon: "⌂", roles: ["customer", "admin"] },
+  { to: "/my-orders", label: "My orders", icon: "◎", roles: ["customer"] },
+  { to: "/merchant", label: "Restaurant", icon: "◫", roles: ["partner", "admin"] },
+  { to: "/rider", label: "Deliveries", icon: "➜", roles: ["rider", "admin"] },
+  { to: "/ops", label: "Ops", icon: "◈", roles: ["ops", "admin"] },
+  { to: "/partner", label: "Partner", icon: "◇", roles: ["partner", "admin"] },
+  { to: "/support", label: "Support", icon: "?", roles: ["support", "admin"] },
+  { to: "/claims", label: "Claim Risk", icon: "⚑", roles: ["support", "admin"] },
+  { to: "/admin", label: "Admin", icon: "⚙", roles: ["admin"] },
 ];
+
+const ROLE_LABELS = {
+  customer: "Customer",
+  ops: "Operations",
+  partner: "Merchant partner",
+  rider: "Rider",
+  support: "Support",
+  admin: "Administrator",
+};
+
+const navLinkClass = ({ isActive }) =>
+  `group inline-flex items-center gap-1.5 whitespace-nowrap rounded-xl px-3 py-2 text-sm font-semibold transition ${
+    isActive
+      ? "bg-slate-950 text-white shadow-[0_8px_24px_-14px_rgba(15,23,42,.9)]"
+      : "text-slate-500 hover:bg-white hover:text-slate-950"
+  }`;
 
 export default function App() {
   const { user, profile, role, signOut, loading } = useAuth();
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const location = useLocation();
+  const visibleNav = role ? NAV.filter((item) => item.roles.includes(role)) : [];
+  const activeItem = NAV.find((item) => item.to === location.pathname);
 
   return (
-    <div className="min-h-screen flex flex-col">
-      <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/85 backdrop-blur-md">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-2.5 sm:px-6">
-          <NavLink to="/" className="shrink-0 text-lg font-bold tracking-tight text-slate-900">
-            Resolve<span className="text-teal-700">X</span>
+    <div className="app-surface min-h-screen flex flex-col">
+      <header className="sticky top-0 z-40 border-b border-slate-200/70 bg-white/78 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-2.5 sm:px-6">
+          <NavLink to="/" className="group flex shrink-0 items-center gap-2" onClick={() => setMobileOpen(false)}>
+            <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-slate-950 text-base font-black text-white shadow-lg transition group-hover:-translate-y-0.5 group-hover:rotate-3">
+              X
+            </span>
+            <span className="hidden leading-tight sm:block">
+              <span className="block text-base font-black tracking-tight text-slate-950">ResolveX</span>
+              <span className="block text-[9px] font-bold uppercase tracking-[0.18em] text-teal-700">Delivery intelligence</span>
+            </span>
           </NavLink>
-          <div className="flex min-w-0 items-center gap-3">
-            {!loading && user && role && (
-              <nav className="flex max-w-[58vw] items-center gap-1 overflow-x-auto sm:max-w-none">
-                {NAV.filter((item) => item.roles.includes(role)).map((item) => (
-                  <NavLink key={item.to} to={item.to} end={item.to === "/"} className={navLinkClass}>
-                    {item.label}
-                  </NavLink>
-                ))}
-              </nav>
-            )}
+
+          {!loading && user && role && (
+            <nav className="ml-2 hidden min-w-0 flex-1 items-center gap-1 overflow-x-auto lg:flex">
+              {visibleNav.map((item) => (
+                <NavLink key={item.to} to={item.to} end={item.to === "/"} className={navLinkClass}>
+                  <span className="text-xs opacity-70">{item.icon}</span>
+                  {item.label}
+                </NavLink>
+              ))}
+            </nav>
+          )}
+
+          <div className="ml-auto flex items-center gap-2">
             {!loading && !user && (
-              <div className="flex items-center gap-2">
-                <NavLink to="/login" className="text-sm font-medium text-slate-600">Sign in</NavLink>
-                <NavLink to="/signup" className="btn">Create account</NavLink>
-              </div>
+              <>
+                <NavLink to="/login" className="hidden rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-white hover:text-slate-950 sm:inline-flex">
+                  Sign in
+                </NavLink>
+                <NavLink to="/signup" className="btn">
+                  Create account
+                </NavLink>
+              </>
             )}
+
             {!loading && user && (
-              <div className="flex items-center gap-3">
-                <div className="hidden text-right leading-tight sm:block">
-                  <p className="text-sm font-medium">{profile?.display_name || user.email}</p>
-                  <p className="text-[11px] uppercase tracking-wide text-slate-500">{role || "unassigned"}</p>
+              <>
+                <div className="hidden items-center gap-2 rounded-2xl border border-slate-200/80 bg-white/80 px-3 py-1.5 shadow-sm sm:flex">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-teal-100 to-amber-50 text-xs font-black text-slate-900">
+                    {(profile?.display_name || user.email || "U").slice(0, 1).toUpperCase()}
+                  </div>
+                  <div className="max-w-36 leading-tight">
+                    <p className="truncate text-xs font-bold text-slate-900">{profile?.display_name || user.email}</p>
+                    <p className="truncate text-[10px] font-semibold uppercase tracking-wide text-slate-400">{ROLE_LABELS[role] || role}</p>
+                  </div>
                 </div>
-                <button className="btn-secondary" onClick={signOut}>Sign out</button>
-              </div>
+                <button className="btn-secondary hidden sm:inline-flex" onClick={signOut}>Sign out</button>
+                <button
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white text-lg text-slate-700 shadow-sm lg:hidden"
+                  onClick={() => setMobileOpen((open) => !open)}
+                  aria-label="Toggle navigation"
+                  aria-expanded={mobileOpen}
+                >
+                  {mobileOpen ? "×" : "≡"}
+                </button>
+              </>
             )}
           </div>
         </div>
+
+        {!loading && user && role && mobileOpen && (
+          <div className="border-t border-slate-100 bg-white/95 px-4 py-3 shadow-xl lg:hidden">
+            <div className="mx-auto grid max-w-7xl grid-cols-2 gap-2 sm:grid-cols-3">
+              {visibleNav.map((item) => (
+                <NavLink key={item.to} to={item.to} end={item.to === "/"} className={navLinkClass} onClick={() => setMobileOpen(false)}>
+                  <span className="text-xs opacity-70">{item.icon}</span>
+                  {item.label}
+                </NavLink>
+              ))}
+              <button className="btn-secondary" onClick={signOut}>Sign out</button>
+            </div>
+          </div>
+        )}
       </header>
 
-      <main className="flex-1">
+      {user && activeItem && location.pathname !== "/" && (
+        <div className="border-b border-slate-200/60 bg-white/45 backdrop-blur">
+          <div className="mx-auto flex max-w-7xl items-center gap-2 px-4 py-2 text-xs text-slate-500 sm:px-6">
+            <span className="font-semibold text-slate-400">ResolveX</span>
+            <span>›</span>
+            <span className="font-semibold text-slate-700">{activeItem.label}</span>
+          </div>
+        </div>
+      )}
+
+      <main className="flex-1 animate-fade-up">
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/" element={<Storefront />} />
