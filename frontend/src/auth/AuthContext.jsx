@@ -26,8 +26,15 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     let mounted = true;
-    supabase.auth.getSession().then(async ({ data }) => {
+    supabase.auth.getSession().then(async ({ data, error }) => {
       if (!mounted) return;
+      if (error) {
+        await supabase.auth.signOut({ scope: "local" });
+        setSession(null);
+        setProfile(null);
+        setLoading(false);
+        return;
+      }
       setSession(data.session ?? null);
       await loadProfile(data.session ?? null);
       if (mounted) setLoading(false);

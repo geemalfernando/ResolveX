@@ -151,22 +151,44 @@ def ensure_demo_customer(sb) -> str:
     return str(created[0]["id"])
 
 
+# The partner restaurant must sit in a normal delivery zone. Scenario zones
+# (DEMO_V2_*, BUSY_*, ML_VERIFY_*) contain no riders with a login, so an order
+# placed there can never be assigned or delivered.
+PARTNER_MERCHANT = {
+    "name": "ResolveX Demo Merchant",
+    "zone_id": "ZONE_A",
+    "address": "ResolveX Demo Kitchen",
+    "lat": 6.9275,
+    "lng": 79.8615,
+    "avg_prep_minutes": 15,
+}
+
+
 def ensure_demo_merchant(sb) -> str:
-    name = "ResolveX Demo Merchant"
-    rows = sb.table("merchants").select("id").eq("name", name).limit(1).execute().data or []
-    if rows:
-        return str(rows[0]["id"])
-    created = sb.table("merchants").insert(
-        {
-            "name": name,
-            "zone_id": "ZONE_A",
-            "address": "ResolveX Demo Kitchen",
-            "lat": 6.9275,
-            "lng": 79.8615,
-            "avg_prep_minutes": 15,
-        }
-    ).execute().data
-    return str(created[0]["id"])
+    linked = (
+        sb.table("user_profiles").select("merchant_id").eq("role", "partner").execute().data or []
+    )
+    merchant_id = next((str(row["merchant_id"]) for row in linked if row.get("merchant_id")), None)
+    if not merchant_id:
+        rows = (
+            sb.table("merchants")
+            .select("id")
+            .eq("name", PARTNER_MERCHANT["name"])
+            .limit(1)
+            .execute()
+            .data
+            or []
+        )
+        merchant_id = str(rows[0]["id"]) if rows else None
+    if not merchant_id:
+        created = sb.table("merchants").insert(PARTNER_MERCHANT).execute().data
+        return str(created[0]["id"])
+
+    current = sb.table("merchants").select("zone_id").eq("id", merchant_id).single().execute().data
+    if (current or {}).get("zone_id") != PARTNER_MERCHANT["zone_id"]:
+        sb.table("merchants").update(PARTNER_MERCHANT).eq("id", merchant_id).execute()
+        print(f"Moved the partner restaurant back to {PARTNER_MERCHANT['zone_id']}.")
+    return merchant_id
 
 
 def main() -> int:

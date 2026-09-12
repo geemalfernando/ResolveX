@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .config import get_settings
 from .ml.eta_model import eta_model
 from .ml.fault_model import fault_model
-from .routers import aggregator, cases, checks, orders, workflow, demo, ops_map, commerce
+from .routers import aggregator, assistant, cases, checks, orders, workflow, demo, ops_map, commerce, rider_join
 
 settings = get_settings()
 
@@ -28,9 +28,6 @@ def model_status() -> dict:
     return {**fault_model.status(), **eta_model.status()}
 
 
-# Keep explicitly configured production origins, while always allowing local
-# Vite development from either hostname. This avoids localhost vs 127.0.0.1
-# mismatches and also works when Vite selects a different local port.
 configured_origins = [
     origin.strip().rstrip("/")
     for origin in settings.cors_origins.split(",")
@@ -48,9 +45,11 @@ app.add_middleware(
 )
 
 app.include_router(commerce.router)
+app.include_router(rider_join.router)
 app.include_router(cases.router)
 app.include_router(checks.router)
 app.include_router(aggregator.router)
+app.include_router(assistant.router)
 app.include_router(orders.router)
 app.include_router(workflow.router)
 app.include_router(demo.router)

@@ -51,12 +51,21 @@ def _local_decision_engine(payload: AggregatorInput) -> dict:
     photo_missing = bool(photo and photo.details.get("match") is None)
     photo_damaged = bool(photo and photo.details.get("damage_detected"))
     photo_mismatch = bool(photo and photo.details.get("match") is False)
+    comparison_party = (photo.details or {}).get("comparison_party") if photo else None
+    if comparison_party == "NEITHER":
+        photo_damaged = False
+        photo_mismatch = False
+    if comparison_party == "INCONCLUSIVE":
+        photo_damaged = False
+        photo_mismatch = False
+    photo_points_rider = comparison_party == "RIDER" or (photo and photo.flagged and comparison_party == "RIDER")
+    photo_points_merchant = comparison_party == "MERCHANT" or photo_damaged or photo_mismatch
     high_claim_risk = bool(
         claims and claims.flagged and float(claims.details.get("risk_score") or 0) >= 0.55
     )
     timing_flagged = bool(timing and timing.flagged)
     route_flagged = bool(route and route.flagged)
-    corroborating = photo_damaged or photo_mismatch or timing_flagged or route_flagged
+    corroborating = photo_points_merchant or photo_points_rider or timing_flagged or route_flagged
 
     if trigger == CaseTrigger.zone_delay or (zone_wide and complaint is None):
         return {
@@ -112,7 +121,18 @@ def _local_decision_engine(payload: AggregatorInput) -> dict:
             ],
         }
 
-    if photo_damaged or photo_mismatch:
+    if photo_points_rider:
+        return {
+            "claim_valid": True,
+            "fault_party": FaultParty.rider.value,
+            "confidence": 0.78,
+            "outcome": Outcome.auto_refund.value,
+            "reasons": [
+                _reason(CheckName.photo, photo.summary if photo else "Handover or claim photo diverges from the packing photo."),
+            ],
+        }
+
+    if photo_points_merchant:
         return {
             "claim_valid": True,
             "fault_party": FaultParty.merchant.value,
@@ -287,8 +307,16 @@ def assess_claim(payload):
         supported = None
         reason = "A photo of the delivered items and outer packaging is required."
     elif photo_required:
+        party = photo.details.get("comparison_party") if photo else None
         supported = photo.details.get("complaint_supported") if photo else None
-        reason = "Photo evidence supports this complaint." if supported else "Photo evidence is inconclusive or does not support the complaint; review is needed."
+        if party == "NEITHER":
+            supported = False
+            reason = "Packing, handover, and claim photos do not support this complaint."
+        elif party in {"MERCHANT", "RIDER"}:
+            supported = True
+            reason = photo.summary if photo else "Photo comparison supports this complaint."
+        else:
+            reason = "Photo evidence is inconclusive or does not support the complaint; review is needed." if supported is not True else "Photo evidence supports this complaint."
     elif complaint and complaint.type == ComplaintType.not_delivered:
         supported = case.order.timestamps.dropped_off_at is None
         reason = "No drop-off has been recorded." if supported else "Delivery is recorded; support should review the non-delivery report."
@@ -346,6 +374,16 @@ def run_aggregator(payload: AggregatorInput) -> Verdict:
         outcome = Outcome.support_ticket
 
     reasons = [VerdictReason(check=c.check_name, reason=c.summary) for c in payload.check_results]
+    photo = checks.get(CheckName.photo)
+    party = (photo.details or {}).get("comparison_party") if photo else None
+    if party:
+        reasons.insert(
+            0,
+            VerdictReason(
+                check=CheckName.photo,
+                reason=f"Image comparison signal: {party}. This does not replace timing, route, zone, or claim-history.",
+            ),
+        )
     if prediction == "EXTERNAL":
         reasons.append(VerdictReason(
             check=CheckName.zone,

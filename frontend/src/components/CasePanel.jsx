@@ -8,7 +8,7 @@ function formatTime(value) {
   return Number.isNaN(date.getTime()) ? "" : date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
-export default function CasePanel({ record, technical = false }) {
+export default function CasePanel({ record, technical = false, hideDecision = false }) {
   const c = record.case;
   const v = record.verdict;
   const w = c?.workflow ?? {};
@@ -22,6 +22,14 @@ export default function CasePanel({ record, technical = false }) {
   const zone = zoneCheck?.details ?? {};
   const photoCheck = results.find((r) => r.check_name === "photo");
   const photo = photoCheck?.details ?? {};
+  const comparisonParty = photo.comparison_party;
+  const comparison = photo.comparison ?? {};
+  const evidence = c.evidence ?? {};
+  const evidencePhotos = [
+    ["Packing", evidence.packing_url],
+    ["Handover", evidence.handover_url],
+    ["Claim", evidence.claim_url || c.complaint?.photo_url],
+  ].filter(([, url]) => url && String(url).startsWith("http"));
   const historyCheck = results.find((r) => r.check_name === "claim_history");
   const history = historyCheck?.details ?? {};
   const outcome = resolution(record);
@@ -31,6 +39,7 @@ export default function CasePanel({ record, technical = false }) {
 
   return (
     <section className="space-y-4" data-testid="case-panel">
+      {!hideDecision && (
       <div className="overflow-hidden rounded-2xl bg-slate-900 text-white">
         <div className="px-5 py-4">
           <div className="flex items-start justify-between gap-3">
@@ -51,11 +60,12 @@ export default function CasePanel({ record, technical = false }) {
           {w.refund && (
             <div className="mt-3 rounded-xl bg-emerald-400/15 px-3 py-2 text-emerald-100">
               <p className="font-semibold">LKR {Number(w.refund.amount).toLocaleString()} · {w.refund.status}</p>
-              <p className="text-xs">{w.refund.reference} · Demo refund</p>
+              <p className="text-xs">{w.refund.reference} · Refunded to {w.refund.destination || w.refund.account || "ResolveX Pay"}</p>
             </div>
           )}
         </div>
       </div>
+      )}
 
       <div className="flex items-center justify-between text-sm">
         <div>
@@ -70,7 +80,7 @@ export default function CasePanel({ record, technical = false }) {
           <p className="text-[11px] uppercase tracking-wide text-slate-500">Complaint</p>
           <p className="mt-1 font-semibold capitalize">{c.complaint?.type?.replaceAll("_", " ") ?? "Proactive incident"}</p>
           <p className="mt-1 text-slate-600">{c.complaint?.description || "Incident detected before a customer complaint."}</p>
-          {c.complaint?.photo_url && (
+          {c.complaint?.photo_url && !evidencePhotos.length && (
             <a className="mt-2 inline-block text-xs font-medium text-teal-800 underline" href={c.complaint.photo_url} target="_blank" rel="noreferrer">
               View evidence photo
             </a>
@@ -80,11 +90,30 @@ export default function CasePanel({ record, technical = false }) {
           <p className="text-[11px] uppercase tracking-wide text-slate-500">Evidence snapshot</p>
           <p className="mt-1">Timing {timing.delivery_minutes ?? "—"} / {timing.delivery_promised_minutes ?? "—"} min</p>
           <p>Zone late {Math.round((zone.late_ratio ?? 0) * 100)}%</p>
-          <p>Photo {c.complaint?.photo_url ? (photo.complaint_supported === true ? "supports complaint" : "reviewed") : "not attached"}</p>
+          <p>Photo {comparisonParty ? `comparison ${comparisonParty}` : c.complaint?.photo_url ? (photo.complaint_supported === true ? "supports complaint" : "reviewed") : "not attached"}</p>
           {externalCause && <p className="mt-1 font-medium text-amber-800">Neither party blamed: shared zone disruption detected.</p>}
           {technical && <p>Claim history {history.claims_last_90_days ?? 0} prior · risk {Math.round((history.risk_score ?? history.risk_probability ?? 0) * 100)}%</p>}
         </div>
       </div>
+
+      {evidencePhotos.length > 0 && (
+        <div className="rounded-2xl border border-slate-200 bg-white p-4">
+          <h3 className="text-sm font-semibold">Delivery evidence photos</h3>
+          <p className="mt-1 text-xs text-slate-500">
+            {comparisonParty
+              ? `Image signal: ${comparisonParty}${comparison.confidence != null ? ` · ${Math.round(comparison.confidence * 100)}%` : ""}. Timing, route, zone, and claim history still decide the outcome.`
+              : "Packing, handover, and claim photos are compared when a refund is filed."}
+          </p>
+          <div className="mt-3 grid gap-3 sm:grid-cols-3">
+            {evidencePhotos.map(([label, url]) => (
+              <a key={label} href={url} target="_blank" rel="noreferrer" className="block">
+                <p className="mb-1 text-[11px] uppercase tracking-wide text-slate-500">{label}</p>
+                <img src={url} alt={`${label} photo`} className="h-28 w-full rounded-xl object-cover ring-1 ring-slate-200" />
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
 
       {reasons.length > 0 && (
         <div className="rounded-2xl border border-slate-200 bg-white p-4">

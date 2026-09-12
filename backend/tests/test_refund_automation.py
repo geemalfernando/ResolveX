@@ -10,6 +10,7 @@ class RefundAutomationTests(unittest.TestCase):
         with patch.object(wf, 'rows', return_value=[dict(id='12345678-existing',amount=1600,outcome='approved',created_at='2026-01-01')]), patch.object(wf,'get_supabase') as db:
             refund = wf.refund(case)
         self.assertEqual(refund['amount'],1600)
+        self.assertEqual(refund['destination'], 'ResolveX Pay wallet')
         db.assert_not_called()
 
     def test_low_risk_refund_and_high_risk_review(self):
