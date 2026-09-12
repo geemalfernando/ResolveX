@@ -7,7 +7,7 @@ const HOME_BY_ROLE = {
   ops: "/ops",
   partner: "/merchant",
   rider: "/rider",
-  support: "/support",
+  support: "/claims",
   admin: "/admin",
 };
 
@@ -42,11 +42,11 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-[calc(100vh-65px)] grid place-items-center p-6">
-      <form onSubmit={submit} className="w-full max-w-md rounded-2xl border bg-white p-7 shadow-sm">
-        <p className="text-sm font-semibold text-slate-500">ResolveX</p>
-        <h1 className="mt-1 text-2xl font-bold">Sign in</h1>
-        <p className="mt-2 text-sm text-slate-600">Your assigned role controls which dashboard and data you can access.</p>
+    <div className="min-h-[calc(100vh-3.6rem)] grid place-items-center p-6">
+      <form onSubmit={submit} className="panel w-full max-w-md p-8">
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-teal-700">ResolveX</p>
+        <h1 className="mt-2 text-3xl font-bold tracking-tight">Sign in</h1>
+        <p className="mt-2 text-sm text-slate-500">Your role opens the right workspace — shop, ops, partner, or claim review.</p>
 
         {(error || authError) && <p className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{error || authError}</p>}
 

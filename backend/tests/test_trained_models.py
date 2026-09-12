@@ -39,7 +39,7 @@ class TrainedModelTests(unittest.TestCase):
         estimator = joblib.load(MODEL_DIR / "eta_model.joblib")["pipeline"]
         self.assertEqual(list(estimator.feature_names_in_), ETA_FEATURES)
 
-    def test_original_moderate_rider_goes_to_support_without_changing_confidence(self):
+    def test_original_moderate_rider_auto_refunds_when_claim_risk_is_low(self):
         from backend.app import checks
         from backend.app.models import AggregatorInput
         with TestClient(app) as client:
@@ -51,7 +51,7 @@ class TrainedModelTests(unittest.TestCase):
         verdict = response.json()
         self.assertTrue(verdict["model_used"])
         self.assertEqual(verdict["model_prediction"], "RIDER")
-        self.assertEqual(verdict["outcome"], "SUPPORT_TICKET")
+        self.assertEqual(verdict["outcome"], "AUTO_REFUND")
         self.assertGreaterEqual(verdict["confidence"], 0.55)
         self.assertLess(verdict["confidence"], 0.85)
         self.assertEqual(verdict["confidence"], max(verdict["class_probabilities"].values()))

@@ -13,14 +13,15 @@ class RefundAutomationTests(unittest.TestCase):
         db.assert_not_called()
 
     def test_low_risk_refund_and_high_risk_review(self):
-        for risk, flagged in [(0.0,False),(0.9,True)]:
-            with self.subTest(risk=risk):
+        cases = [(0.0, False, "AUTO_REFUND"), (0.39, False, "AUTO_REFUND"), (0.41, False, "SUPPORT_TICKET"), (0.9, True, "SUPPORT_TICKET")]
+        for risk, flagged, outcome in cases:
+            with self.subTest(risk=risk, flagged=flagged):
                 case=case_for()
                 check=CheckResult(check_name='claim_history',flagged=flagged,confidence=.9,summary='History screened',details=dict(risk_score=risk,source='rules'))
                 verdict=Verdict(claim_valid=True,fault_party='rider',confidence=.99,outcome='AUTO_REFUND',reasons=[])
                 with patch.object(wf,'get_supabase',return_value=MagicMock()), patch.object(wf,'save_case'), patch.object(wf,'close_tickets'), patch.object(wf,'ticket') as ticket, patch.object(wf,'refund') as refund:
                     result=wf.persist_analysis(case,[check],verdict)
-                self.assertEqual(result.verdict.outcome.value,'SUPPORT_TICKET' if flagged else 'AUTO_REFUND')
-                self.assertEqual(refund.call_count,0 if flagged else 1)
-                self.assertEqual(ticket.call_count,1 if flagged else 0)
-                self.assertEqual(case.workflow['fraud_screening']['status'],'review_required' if flagged else 'low_risk')
+                self.assertEqual(result.verdict.outcome.value, outcome)
+                self.assertEqual(refund.call_count, 1 if outcome == "AUTO_REFUND" else 0)
+                self.assertEqual(ticket.call_count, 0 if outcome == "AUTO_REFUND" else 1)
+                self.assertEqual(case.workflow['fraud_screening']['status'], 'low_risk' if outcome == "AUTO_REFUND" else 'review_required')

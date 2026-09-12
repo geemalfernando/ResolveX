@@ -6,7 +6,7 @@ const HOME_BY_ROLE = {
   ops: "/ops",
   partner: "/merchant",
   rider: "/rider",
-  support: "/support",
+  support: "/claims",
   admin: "/admin",
 };
 

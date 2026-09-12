@@ -185,7 +185,7 @@ Human-in-the-loop queue, created when a verdict's outcome is `SUPPORT_TICKET`.
 Enable Postgres replication (Supabase Realtime) on:
 - `orders` (status changes drive the ops dashboard)
 - `rider_gps_points` (live map trails)
-- `cases` / `verdicts` (dashboard + support queue live updates)
+- `cases` / `verdicts` (dashboard + Claim Risk live updates)
 
 ```sql
 alter publication supabase_realtime add table orders;

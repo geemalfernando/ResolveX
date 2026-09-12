@@ -6,6 +6,7 @@ risk_score drives the decision so mid-band scores stay meaningful.
 
 from __future__ import annotations
 
+from ..config import get_settings
 from ..ml.claim_history_model import LOOKBACK_DAYS, extract_features, predict
 from ..models import Case, CheckName, CheckResult
 
@@ -51,15 +52,18 @@ def run(case: Case) -> CheckResult:
         confidence = 0.6 + risk_score / 3 if flagged else 0.8
 
     claims_count = int(features["claims_last_90_days"])
-    if flagged:
+    threshold = get_settings().claim_history_auto_refund_threshold
+    if flagged or risk_score >= threshold:
         summary = (
             f"Customer has {claims_count} claims in the last {LOOKBACK_DAYS} days "
-            f"(risk={risk_score:.2f}{', ' + ', '.join(risk_flags) if risk_flags else ''})."
+            f"(risk={risk_score:.0%}). Auto-refund held for admin review "
+            f"(threshold {threshold:.0%}"
+            f"{', ' + ', '.join(risk_flags) if risk_flags else ''})."
         )
     else:
         summary = (
-            f"Customer has {claims_count} claims in the last {LOOKBACK_DAYS} days; "
-            "no unusual pattern."
+            f"Customer has {claims_count} claims in the last {LOOKBACK_DAYS} days "
+            f"(risk={risk_score:.0%}); below {threshold:.0%} so this claim can auto-refund."
         )
 
     details = {
@@ -69,6 +73,8 @@ def run(case: Case) -> CheckResult:
         "risk_score": round(float(risk_score), 2),
         "risk_flags": risk_flags,
         "source": source,
+        "auto_refund_eligible": (not flagged) and risk_score < threshold,
+        "auto_refund_threshold": threshold,
     }
     if prediction:
         details["anomaly"] = prediction["anomaly"]

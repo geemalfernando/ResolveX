@@ -3,7 +3,12 @@ import { Link } from "react-router-dom";
 
 import { api } from "../lib/api";
 import RiderAccounts from "../components/RiderAccounts";
-import ClaimRiskBoard from "./ClaimRiskBoard.jsx";
+
+function riskBadge(score = 0) {
+  const pct = Math.round(Number(score || 0) * 100);
+  const cls = pct >= 55 ? "bg-rose-100 text-rose-800" : pct >= 35 ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800";
+  return <span className={`rounded-full px-2 py-1 text-xs font-semibold ${cls}`}>{pct}%</span>;
+}
 
 export default function Admin() {
   const [data, setData] = useState(null);
@@ -28,130 +33,132 @@ export default function Admin() {
     }
   }
 
+  const refunds = data?.refunds ?? [];
+  const reviews = data?.fraud_reviews ?? [];
+  const accounts = (data?.accounts ?? []).filter((account) => account.claims > 0);
+
   return (
-    <div className="max-w-6xl mx-auto p-6 space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+    <div className="page-shell space-y-5">
+      <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold">System administration</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Review human overrides, repeat faults, refund-abuse signals, and AI claim risk.
-          </p>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-teal-700">Administration</p>
+          <h1 className="text-2xl font-bold tracking-tight">Control center</h1>
+          <p className="mt-1 text-sm text-slate-500">Monitor refunds, AI claim risk, account flags and human-review feedback.</p>
         </div>
-        <Link to="/claims" className="btn-secondary">
-          Open full Claim Risk board
-        </Link>
+        <div className="flex gap-2">
+          <Link to="/support" className="btn-secondary">Support queue</Link>
+          <Link to="/claims" className="btn">Open Claim Risk</Link>
+        </div>
       </div>
 
-      {error && <p role="alert" className="text-red-700">{error}</p>}
+      {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {[
-          ["Reviewed cases", data?.reviewed_cases],
+          ["Reviewed", data?.reviewed_cases],
           ["Overrides", data?.overrides],
-          ["AI agreement", data?.agreement_rate == null ? "—" : `${(data.agreement_rate * 100).toFixed(1)}%`],
+          ["AI agreement", data?.agreement_rate == null ? "—" : `${(data.agreement_rate * 100).toFixed(0)}%`],
+          ["Claim risk review", reviews.length],
         ].map(([label, value]) => (
-          <div key={label} className="rounded-xl border bg-white p-5">
-            <p>{label}</p>
-            <b className="text-2xl">{value ?? 0}</b>
+          <div key={label} className="panel p-4">
+            <p className="text-xs uppercase tracking-wide text-slate-500">{label}</p>
+            <b className="mt-1 block text-2xl tracking-tight">{value ?? 0}</b>
           </div>
         ))}
       </div>
 
-      <RiderAccounts />
-      <section className="rounded-xl border bg-white p-5 space-y-4">
-        <h2 className="font-semibold">Automated refunds & fraud screening</h2>
-        <p className="text-sm text-slate-500">Eligible claims receive demo refunds automatically. Unusual claim history pauses automatic refunds for support review; it does not prove fraud.</p>
-        <div className="grid sm:grid-cols-2 gap-4">
-          <div className="rounded-lg bg-emerald-50 p-4"><b>{new Set((data?.refunds ?? []).map(r => r.reference)).size} refunds completed</b><p className="text-xs">Simulated payments · no money transferred</p></div>
-          <div className="rounded-lg bg-amber-50 p-4"><b>{data?.fraud_reviews?.length ?? 0} claims need risk review</b><p className="text-xs">Screened automatically on every analysis</p></div>
-        </div>
-        <h3 className="font-medium">Refund activity</h3>
-        <div className="overflow-auto"><table className="w-full text-sm text-left"><thead><tr>{['Customer', 'Reference', 'Amount', 'Status'].map(h => <th className="p-2" key={h}>{h}</th>)}</tr></thead><tbody>
-          {(data?.refunds ?? []).map(r => <tr className="border-t" key={r.case_id}><td className="p-2">{r.customer}</td><td>{r.reference}</td><td>{r.currency} {Number(r.amount).toLocaleString()}</td><td>{r.status}</td></tr>)}
-        </tbody></table>{!data?.refunds?.length && <p className="text-sm text-slate-500">No refunds completed yet.</p>}</div>
-        <h3 className="font-medium">Suspected claim abuse — needs review</h3>
-        {(data?.fraud_reviews ?? []).map(r => <div key={r.case_id} className="rounded border border-amber-200 p-3 text-sm"><b>{r.customer}</b><p>{r.summary}</p><p className="text-xs text-slate-500">{r.claims_last_90_days ?? 'Unknown'} prior claims · {r.source === 'rules' ? 'Rule-based screening' : r.source} · Support review required</p></div>)}
-        {!data?.fraud_reviews?.length && <p className="text-sm text-slate-500">No claims currently flagged for risk review.</p>}
-      </section>
-
-      <section className="rounded-xl border bg-white p-5 overflow-auto">
-        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-          <div>
-            <h2 className="font-semibold">Claim abuse monitoring</h2>
-            <p className="text-xs text-slate-500">
-              Account-level frequency signals. Detailed ML claim-risk probabilities are shown below.
-            </p>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <section className="panel flex max-h-[22rem] flex-col p-5">
+          <h2 className="font-semibold">Refunds</h2>
+          <p className="text-xs text-slate-500">Automatically resolved claims and support-approved refunds.</p>
+          <div className="mt-3 min-h-0 flex-1 overflow-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="sticky top-0 bg-white text-xs uppercase text-slate-400">
+                <tr>{["Customer", "Ref", "Amount", "Status"].map((h) => <th className="py-2" key={h}>{h}</th>)}</tr>
+              </thead>
+              <tbody>
+                {refunds.map((r) => (
+                  <tr className="border-t border-slate-100" key={`${r.case_id}-${r.reference}`}>
+                    <td className="py-2">{r.customer}</td>
+                    <td className="font-mono text-xs">{r.reference}</td>
+                    <td>{r.currency} {Number(r.amount).toLocaleString()}</td>
+                    <td className="capitalize">{r.status}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {!refunds.length && <p className="py-6 text-sm text-slate-500">No refunds yet.</p>}
           </div>
-          <Link to="/claims" className="text-sm font-medium text-slate-700 underline">
-            View dedicated Claim Risk page
-          </Link>
+        </section>
+
+        <section className="panel flex max-h-[22rem] flex-col p-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="font-semibold">Claim Risk · AI</h2>
+              <p className="text-xs text-slate-500">High-risk open claims are routed to review, not automatically rejected.</p>
+            </div>
+            <Link to="/claims" className="text-sm font-medium text-teal-800">Full board</Link>
+          </div>
+          <div className="mt-3 min-h-0 flex-1 space-y-2 overflow-auto">
+            {reviews.map((r) => (
+              <div key={r.case_id} className="rounded-xl bg-amber-50 px-3 py-2 text-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <b>{r.customer}</b>
+                  {riskBadge(r.risk_score)}
+                </div>
+                <p className="mt-1 text-xs text-slate-600">
+                  {r.claims_last_90_days ?? 0} claims / 90d{r.risk_flags?.length ? ` · ${r.risk_flags.join(", ")}` : ""}
+                </p>
+              </div>
+            ))}
+            {!reviews.length && <p className="py-6 text-sm text-slate-500">No claims waiting for risk review.</p>}
+          </div>
+        </section>
+      </div>
+
+      <section className="panel overflow-hidden">
+        <div className="border-b px-5 py-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="font-semibold">Customer claim-risk monitoring</h2>
+              <p className="text-xs text-slate-500">The risk model affects review routing, not operational fault attribution.</p>
+            </div>
+            <Link to="/claims" className="text-sm font-medium text-teal-800">Review cases</Link>
+          </div>
         </div>
-        <table className="w-full text-sm text-left">
-          <thead>
-            <tr>
-              {['Customer', 'Orders', 'Claims', 'Refunds', 'Review', 'Action'].map((title) => (
-                <th className="p-2" key={title}>{title}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {data?.accounts
-              .filter((account) => account.claims > 0)
-              .map((account) => (
-                <tr key={account.id} className="border-t">
-                  <td className="p-2">{account.name}</td>
+        <div className="max-h-80 overflow-auto">
+          <table className="w-full text-left text-sm">
+            <thead className="sticky top-0 bg-white text-xs uppercase text-slate-400">
+              <tr>{["Customer", "Orders", "Claims", "Refunds", "AI risk", "Signals", "Status", ""].map((title) => <th className="px-4 py-2" key={title}>{title}</th>)}</tr>
+            </thead>
+            <tbody>
+              {accounts.map((account) => (
+                <tr key={account.id} className="border-t border-slate-100">
+                  <td className="px-4 py-2 font-medium">{account.name}</td>
                   <td>{account.orders}</td>
                   <td>{account.claims}</td>
                   <td>{account.refunds}</td>
-                  <td>
-                    {account.manual_review
-                      ? 'Manual review'
-                      : account.claims >= 3
-                        ? 'Review suggested'
-                        : 'Low frequency'}
-                  </td>
-                  <td>
-                    <button
-                      className="btn-secondary my-2"
-                      onClick={() => flag(account.id, !account.manual_review)}
-                    >
-                      {account.manual_review ? 'Clear flag' : 'Require manual review'}
+                  <td>{riskBadge(account.claim_risk?.risk_score)}</td>
+                  <td className="max-w-52 text-xs text-slate-500">{account.claim_risk?.risk_flags?.join(", ") || "Normal pattern"}</td>
+                  <td>{account.manual_review ? "Manual review" : account.claim_risk?.flagged ? "Review suggested" : "Normal"}</td>
+                  <td className="px-4 py-2">
+                    <button className="btn-secondary" onClick={() => flag(account.id, !account.manual_review)}>
+                      {account.manual_review ? "Clear" : "Flag"}
                     </button>
                   </td>
                 </tr>
               ))}
-          </tbody>
-        </table>
-        <p className="text-xs text-slate-500 mt-2">
-          Flags request review. No automatic permanent penalties are applied.
-        </p>
-      </section>
-
-      <section className="rounded-xl border bg-white overflow-hidden">
-        <div className="border-b bg-slate-50 px-5 py-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <h2 className="font-semibold">Claim Risk · AI</h2>
-              <p className="text-xs text-slate-500 mt-1">
-                Claim-history model signals are available here for administrators and on the dedicated Claim Risk page.
-              </p>
-            </div>
-            <span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-medium text-white">
-              Admin monitoring
-            </span>
-          </div>
+            </tbody>
+          </table>
+          {!accounts.length && <p className="p-5 text-sm text-slate-500">No customer claim history yet.</p>}
         </div>
-        <ClaimRiskBoard />
       </section>
 
-      <section className="rounded-xl border bg-white p-5">
-        <h2 className="font-semibold">Human-confirmed repeat faults</h2>
-        <pre className="text-xs overflow-auto mt-2">{JSON.stringify(data?.repeat_faults, null, 2)}</pre>
-      </section>
+      <RiderAccounts />
 
-      <details className="rounded-xl border bg-white p-5">
-        <summary>Model and dataset information</summary>
-        <pre className="text-xs overflow-auto mt-3">{JSON.stringify(models, null, 2)}</pre>
+      <details className="panel p-4 text-sm">
+        <summary className="cursor-pointer font-medium">Model status</summary>
+        <pre className="mt-3 max-h-48 overflow-auto rounded-xl bg-slate-50 p-3 text-xs">{JSON.stringify(models, null, 2)}</pre>
       </details>
     </div>
   );

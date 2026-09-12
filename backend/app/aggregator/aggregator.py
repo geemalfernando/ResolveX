@@ -297,33 +297,70 @@ def assess_claim(payload):
         reason = timing.summary
     else:
         supported, reason = None, "Timing evidence is unavailable."
+    threshold = get_settings().claim_history_auto_refund_threshold
+    if risk >= 0.75:
+        risk_level = "HIGH"
+    elif risk >= threshold:
+        risk_level = "REVIEW"
+    else:
+        risk_level = "LOW"
     return dict(supported=supported, photo_required=photo_required, missing_required_photo=missing,
-                risk_score=risk, risk_level="HIGH" if risk >= 0.5 else "LOW", reason=reason)
+                risk_score=risk, risk_level=risk_level, auto_refund_eligible=risk < threshold,
+                reason=reason)
 
 
 def run_aggregator(payload: AggregatorInput) -> Verdict:
     settings = get_settings()
+    inference = fault_model.infer(payload)
+    claim = assess_claim(payload)
     checks = {c.check_name: c for c in payload.check_results}
     zone = checks.get(CheckName.zone)
     disputed = payload.case.workflow.get("partner", {}).get("status") == "disputed"
+    risk_threshold = settings.claim_history_auto_refund_threshold
+
+    if inference["model_used"]:
+        prediction = inference["model_prediction"]
+        confidence = max(inference["class_probabilities"].values())
+    else:
+        prediction, confidence = _rule_fallback(payload)
+
+    public_party = "NEITHER" if prediction == "EXTERNAL" else prediction
+
     if claim["missing_required_photo"]:
         outcome = Outcome.need_more_info
-    elif disputed or claim["risk_score"] >= 0.5 or not inference["model_used"]:
+    elif (
+        disputed
+        or payload.case.workflow.get("account_manual_review")
+        or float(claim["risk_score"] or 0) >= risk_threshold
+    ):
         outcome = Outcome.support_ticket
     elif prediction == "EXTERNAL" and zone and zone.flagged:
         outcome = Outcome.zone_broadcast
-    elif claim["supported"] and confidence >= settings.auto_action_confidence_threshold and payload.case.complaint:
+    elif payload.case.complaint:
         outcome = Outcome.auto_refund
-    elif not payload.case.complaint and not any(c.flagged for c in payload.check_results):
+    elif not any(c.flagged for c in payload.check_results):
         outcome = Outcome.no_action
-    elif confidence < settings.support_review_confidence_threshold:
+    elif inference["model_used"] and confidence < settings.support_review_confidence_threshold:
         outcome = Outcome.need_more_info
     else:
         outcome = Outcome.support_ticket
+
     reasons = [VerdictReason(check=c.check_name, reason=c.summary) for c in payload.check_results]
     if prediction == "EXTERNAL":
-        reasons.append(VerdictReason(check=CheckName.zone, reason="Neither merchant nor rider is held responsible: evidence indicates zone-wide external conditions."))
-    return Verdict(claim_valid=claim["supported"] is True, claim_assessment=claim,
-        fault_party=FaultParty(public_party.lower()), cause_category=prediction,
-        confidence=confidence, fault_confidence=confidence, fault_prediction=public_party,
-        outcome=outcome, resolution=outcome, reasons=reasons, **inference)
+        reasons.append(VerdictReason(
+            check=CheckName.zone,
+            reason="Neither merchant nor rider is held responsible: evidence indicates zone-wide external conditions.",
+        ))
+    return Verdict(
+        **inference,
+        claim_valid=claim["supported"] is True,
+        claim_assessment=claim,
+        fault_party=FaultParty(public_party.lower()),
+        cause_category=prediction,
+        confidence=confidence,
+        fault_confidence=confidence,
+        fault_prediction=prediction,
+        outcome=outcome,
+        resolution=outcome,
+        reasons=reasons,
+    )

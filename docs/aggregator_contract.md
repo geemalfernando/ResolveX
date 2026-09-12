@@ -23,11 +23,12 @@ excluded from fault features and used separately for claim-risk constraints.
 ## Resolution precedence
 
 1. Missing photo for damaged/wrong/missing-item complaints: NEED_MORE_INFO.
-2. ML unavailable, disputed evidence, inconclusive relevant photo, or claim risk >= 0.5:
-   SUPPORT_TICKET.
-3. Model confidence below 0.55: NEED_MORE_INFO.
-4. Model confidence below 0.85, or NEITHER prediction: SUPPORT_TICKET.
-5. EXTERNAL: ZONE_BROADCAST; otherwise AUTO_REFUND.
+2. Partner dispute, admin manual-review flag, or claim-history AI risk **>= 0.40 (40%)**:
+   SUPPORT_TICKET (admin refunds or denies manually).
+3. EXTERNAL zone-wide delay: ZONE_BROADCAST.
+4. Claim evidence is supported and claim-history risk is **below 40%**: AUTO_REFUND.
+5. Model confidence below 0.55 when ML is loaded and the claim is not already auto-refunded:
+   NEED_MORE_INFO; otherwise SUPPORT_TICKET.
 
 Thresholds are configurable. None of these rules modifies model probabilities.
 Absent photos do not independently block lateness complaints. Fallback confidence
