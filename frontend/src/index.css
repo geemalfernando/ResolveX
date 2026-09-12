@@ -7,3 +7,7 @@ body,
 #root {
   height: 100%;
 }
+
+.field { @apply block w-full mt-1 rounded-md border border-slate-300 px-3 py-2 text-sm bg-white; }
+.btn { @apply inline-flex items-center justify-center rounded-md bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-50; }
+.btn-secondary { @apply inline-flex items-center justify-center rounded-md border border-slate-300 bg-white px-3 py-2 text-sm disabled:opacity-50; }

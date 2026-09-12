@@ -1,0 +1,1091 @@
+{
+  "run_id": "6dcfe22f",
+  "test_records_retained": true,
+  "cases": [
+    {
+      "expected": "MERCHANT",
+      "order_id": "ad2b6759-a96e-46e5-9369-09d40460add6",
+      "zone_id": "ML_VERIFY_6dcfe22f_MERCHANT",
+      "background_order_ids": [
+        "64c50da6-b81e-4e4b-adae-80b1874504c9",
+        "27b7bb92-878a-4c38-aabb-b055400d91a1",
+        "368e4bb8-fe34-4b4b-8604-fa4d4744b8e8",
+        "772b2d7a-d823-400b-90aa-d9450a80dc7c",
+        "c6bd6a04-8012-4e78-8931-dae9a5fe30ab",
+        "1df78472-746d-41dd-892d-837be6f0d6da",
+        "55a3860f-0894-4407-aa0c-97a43ce26c87",
+        "ec404e10-7ccc-445b-9317-05d12b85249f",
+        "7deee582-8c6a-4ebb-ab49-6e4650367126",
+        "f7e18479-bbd7-4d89-a3e7-ae5c39508cef"
+      ],
+      "http_status": 200,
+      "case_id": "1636f580-5b9f-4505-b5ef-6866f914c6ce",
+      "response": {
+        "case_id": "1636f580-5b9f-4505-b5ef-6866f914c6ce",
+        "status": "aggregated",
+        "case": {
+          "case_id": "1636f580-5b9f-4505-b5ef-6866f914c6ce",
+          "trigger": "customer_complaint",
+          "order": {
+            "id": "ad2b6759-a96e-46e5-9369-09d40460add6",
+            "status": "dropped_off",
+            "zone_id": "ML_VERIFY_6dcfe22f_MERCHANT",
+            "items": [
+              {
+                "name": "Demo meal",
+                "qty": 1,
+                "price": 10
+              }
+            ],
+            "promised_prep_minutes": 10,
+            "promised_delivery_minutes": 30,
+            "timestamps": {
+              "placed_at": "2026-09-12T12:00:00Z",
+              "prep_started_at": "2026-09-12T12:00:00Z",
+              "ready_at": "2026-09-12T12:50:00Z",
+              "picked_up_at": "2026-09-12T12:52:00Z",
+              "dropped_off_at": "2026-09-12T13:10:00Z"
+            }
+          },
+          "merchant": {
+            "id": "14936df6-bc21-4017-9105-57e970064447",
+            "name": "ML verification 6dcfe22f MERCHANT",
+            "zone_id": "ML_VERIFY_6dcfe22f_MERCHANT",
+            "lat": 6.9,
+            "lng": 79.8,
+            "avg_prep_minutes": 10
+          },
+          "rider": {
+            "id": "8552116a-56f6-4975-bfb8-231ca00e41be",
+            "name": "ML verification 6dcfe22f",
+            "vehicle": "bike"
+          },
+          "rider_gps_trail": [
+            {
+              "lat": 6.9,
+              "lng": 79.8,
+              "speed_kmh": null,
+              "recorded_at": "2026-09-12T12:52:00Z"
+            },
+            {
+              "lat": 6.9,
+              "lng": 79.8,
+              "speed_kmh": null,
+              "recorded_at": "2026-09-12T12:52:00Z"
+            },
+            {
+              "lat": 6.91,
+              "lng": 79.81,
+              "speed_kmh": null,
+              "recorded_at": "2026-09-12T13:10:00Z"
+            }
+          ],
+          "customer": {
+            "id": "9ae6c0aa-3545-4093-a8a6-8ece9758d7f8",
+            "name": "ML verification 6dcfe22f",
+            "address": "Demo test only",
+            "lat": 6.91,
+            "lng": 79.81
+          },
+          "customer_refund_history": [],
+          "complaint": {
+            "id": "42766074-2285-4bae-ad5b-0f6e922e273f",
+            "type": "late",
+            "description": "Final live verification 6dcfe22f",
+            "photo_url": null
+          },
+          "zone_snapshot": {
+            "zone_id": "ML_VERIFY_6dcfe22f_MERCHANT",
+            "open_orders_count": 10,
+            "average_delay_minutes": 0,
+            "late_orders_count": 0
+          }
+        },
+        "check_results": [
+          {
+            "check_name": "timing",
+            "flagged": true,
+            "confidence": 0.99,
+            "summary": "Delivery took 70 min vs 30 min promised (+40 min late).",
+            "details": {
+              "travel_baseline_source": "eta_model",
+              "travel_delay_minutes": 8.9,
+              "prep_minutes": 50,
+              "prep_promised_minutes": 10,
+              "prep_delay_minutes": 40,
+              "delivery_minutes": 70,
+              "delivery_promised_minutes": 30,
+              "delivery_delay_minutes": 40,
+              "eta_model_used": true,
+              "eta_fallback_reason": null,
+              "predicted_delivery_minutes": 19.1,
+              "predicted_delay_minutes": -10.9,
+              "prediction_source": "combined_delivery_random_forest",
+              "stage_breached": "delivery"
+            }
+          },
+          {
+            "check_name": "rider_route",
+            "flagged": false,
+            "confidence": 0.85,
+            "summary": "Rider route looks normal \u2014 no detours or unusual stops.",
+            "details": {
+              "total_distance_km": 1.57,
+              "straight_line_km": 1.57,
+              "detour_ratio": 1,
+              "max_stationary_minutes": 0,
+              "stationary_points": [],
+              "dropoff_distance_from_address_m": 0,
+              "issues": []
+            }
+          },
+          {
+            "check_name": "zone",
+            "flagged": false,
+            "confidence": 0.85,
+            "summary": "Only 0% of open orders are late in zone ML_VERIFY_6dcfe22f_MERCHANT; no zone-wide pattern.",
+            "details": {
+              "zone_id": "ML_VERIFY_6dcfe22f_MERCHANT",
+              "open_orders_count": 10,
+              "late_orders_count": 0,
+              "average_delay_minutes": 0,
+              "late_ratio": 0,
+              "threshold": 0.3,
+              "zone_wide_delay": false,
+              "traffic_level": "Low"
+            }
+          },
+          {
+            "check_name": "claim_history",
+            "flagged": false,
+            "confidence": 0.8,
+            "summary": "Customer has 0 claims in the last 90 days; no unusual pattern.",
+            "details": {
+              "claims_last_90_days": 0,
+              "approved_ratio": 0,
+              "reason_diversity": 0,
+              "risk_score": 0,
+              "risk_flags": []
+            }
+          },
+          {
+            "check_name": "photo",
+            "flagged": false,
+            "confidence": 0,
+            "summary": "No photo submitted with this case.",
+            "details": {
+              "match": null,
+              "expected_items": [],
+              "detected_items": [],
+              "damage_detected": false
+            }
+          }
+        ],
+        "verdict": {
+          "claim_valid": true,
+          "fault_party": "merchant",
+          "confidence": 0.8353530306802585,
+          "outcome": "SUPPORT_TICKET",
+          "reasons": [
+            {
+              "check": "timing",
+              "reason": "Delivery took 70 min vs 30 min promised (+40 min late)."
+            },
+            {
+              "check": "rider_route",
+              "reason": "Rider route looks normal \u2014 no detours or unusual stops."
+            },
+            {
+              "check": "zone",
+              "reason": "Only 0% of open orders are late in zone ML_VERIFY_6dcfe22f_MERCHANT; no zone-wide pattern."
+            },
+            {
+              "check": "claim_history",
+              "reason": "Customer has 0 claims in the last 90 days; no unusual pattern."
+            },
+            {
+              "check": "photo",
+              "reason": "No photo submitted with this case."
+            }
+          ],
+          "label_provenance": "Synthetic/pseudo-labelled incident scenarios derived from public/synthetic delivery datasets; not genuine historical fault determinations.",
+          "model_used": true,
+          "model_name": "fault_classifier",
+          "model_version": "2.0-synthetic",
+          "model_prediction": "MERCHANT",
+          "fault_prediction": "MERCHANT",
+          "fault_confidence": 0.8353530306802585,
+          "resolution": "SUPPORT_TICKET",
+          "class_probabilities": {
+            "EXTERNAL": 0.029605540445883455,
+            "MERCHANT": 0.8353530306802585,
+            "NEITHER": 0.11185098716453978,
+            "RIDER": 0.023190441709318187
+          },
+          "features": {
+            "prep_delay_min": 40,
+            "pickup_delay_min": 2,
+            "travel_delay_min": 8.9,
+            "route_deviation_km": 0,
+            "stationary_time_min": 0,
+            "zone_late_percentage": 0,
+            "zone_average_delay_min": 0
+          },
+          "feature_names": [
+            "prep_delay_min",
+            "pickup_delay_min",
+            "travel_delay_min",
+            "route_deviation_km",
+            "stationary_time_min",
+            "zone_late_percentage",
+            "zone_average_delay_min"
+          ],
+          "feature_vector": [
+            40,
+            2,
+            8.9,
+            0,
+            0,
+            0,
+            0
+          ],
+          "fallback_reason": null
+        },
+        "eta": {
+          "predicted_minutes": 19.1,
+          "model_used": true,
+          "fallback_reason": null
+        },
+        "fault": {
+          "prediction": "MERCHANT",
+          "confidence": 0.8353530306802585,
+          "confidence_level": "Moderate",
+          "model_used": true,
+          "class_probabilities": {
+            "EXTERNAL": 0.029605540445883455,
+            "MERCHANT": 0.8353530306802585,
+            "NEITHER": 0.11185098716453978,
+            "RIDER": 0.023190441709318187
+          },
+          "fallback_reason": null
+        },
+        "resolution": {
+          "action": "SUPPORT_TICKET"
+        }
+      },
+      "checks": {
+        "model_used": true,
+        "prediction_matches": true,
+        "probabilities_sum_one": true,
+        "confidence_is_max_probability": true,
+        "get_verdict_matches": true,
+        "db_verdict_matches": true,
+        "db_fault_matches": true,
+        "separate_eta_fault_resolution": true,
+        "support_ticket_persisted": true,
+        "db_case_aggregated": true
+      },
+      "frontend_checks": {
+        "prediction": true,
+        "confidence": true,
+        "probabilities": true,
+        "support_review": true,
+        "evidence": true,
+        "eta_separate": true,
+        "provenance": true
+      },
+      "previous_case_id": "6e2983ce-7984-415b-884e-34fffb030f7e"
+    },
+    {
+      "expected": "RIDER",
+      "order_id": "101956f3-064b-4fdb-a337-dc59dce77a16",
+      "zone_id": "ML_VERIFY_6dcfe22f_RIDER",
+      "background_order_ids": [
+        "c9ab14ce-fcb5-4ff1-ab63-df1206cf5d95",
+        "6d56a6cf-dd40-4f64-bea0-b46620b83bcf",
+        "ffe4f48b-c976-4a3f-9952-22755c4e3c31",
+        "4b08d227-0fc1-4abe-8a4f-265423dc8c73",
+        "4be68670-9610-424c-9162-6541a9296fef",
+        "147a12ce-926f-4e54-a823-44e657590151",
+        "0cc0f91a-3c46-4f00-aa11-9102d1e4ea4c",
+        "f83abc2d-3945-4600-8f6e-864ff591aec1",
+        "2a0d8ddb-850f-43d4-852b-7a18f125612e",
+        "be2e49dd-000d-4e95-861f-e62fc8736141"
+      ],
+      "http_status": 200,
+      "case_id": "15fe4545-d06d-47a7-bbf6-fc8d120920bb",
+      "response": {
+        "case_id": "15fe4545-d06d-47a7-bbf6-fc8d120920bb",
+        "status": "aggregated",
+        "case": {
+          "case_id": "15fe4545-d06d-47a7-bbf6-fc8d120920bb",
+          "trigger": "customer_complaint",
+          "order": {
+            "id": "101956f3-064b-4fdb-a337-dc59dce77a16",
+            "status": "dropped_off",
+            "zone_id": "ML_VERIFY_6dcfe22f_RIDER",
+            "items": [
+              {
+                "name": "Demo meal",
+                "qty": 1,
+                "price": 10
+              }
+            ],
+            "promised_prep_minutes": 10,
+            "promised_delivery_minutes": 30,
+            "timestamps": {
+              "placed_at": "2026-09-12T12:00:00Z",
+              "prep_started_at": "2026-09-12T12:00:00Z",
+              "ready_at": "2026-09-12T12:12:00Z",
+              "picked_up_at": "2026-09-12T12:15:00Z",
+              "dropped_off_at": "2026-09-12T13:20:00Z"
+            }
+          },
+          "merchant": {
+            "id": "d9bb5f7d-b8d7-4651-813c-4e800acbb64b",
+            "name": "ML verification 6dcfe22f RIDER",
+            "zone_id": "ML_VERIFY_6dcfe22f_RIDER",
+            "lat": 6.9,
+            "lng": 79.8,
+            "avg_prep_minutes": 10
+          },
+          "rider": {
+            "id": "0630ecb5-66a6-46e2-8801-46415042e47f",
+            "name": "ML verification 6dcfe22f",
+            "vehicle": "bike"
+          },
+          "rider_gps_trail": [
+            {
+              "lat": 6.9,
+              "lng": 79.8,
+              "speed_kmh": null,
+              "recorded_at": "2026-09-12T12:15:00Z"
+            },
+            {
+              "lat": 6.9,
+              "lng": 79.8,
+              "speed_kmh": null,
+              "recorded_at": "2026-09-12T12:40:00Z"
+            },
+            {
+              "lat": 6.91,
+              "lng": 79.79,
+              "speed_kmh": null,
+              "recorded_at": "2026-09-12T12:55:00Z"
+            },
+            {
+              "lat": 6.91,
+              "lng": 79.81,
+              "speed_kmh": null,
+              "recorded_at": "2026-09-12T13:20:00Z"
+            }
+          ],
+          "customer": {
+            "id": "1768fe1b-cc42-44be-ace5-8b5170147889",
+            "name": "ML verification 6dcfe22f",
+            "address": "Demo test only",
+            "lat": 6.91,
+            "lng": 79.81
+          },
+          "customer_refund_history": [],
+          "complaint": {
+            "id": "f82176bf-51dc-44ba-a064-9529042cf715",
+            "type": "late",
+            "description": "Final live verification 6dcfe22f",
+            "photo_url": null
+          },
+          "zone_snapshot": {
+            "zone_id": "ML_VERIFY_6dcfe22f_RIDER",
+            "open_orders_count": 10,
+            "average_delay_minutes": 0,
+            "late_orders_count": 0
+          }
+        },
+        "check_results": [
+          {
+            "check_name": "timing",
+            "flagged": true,
+            "confidence": 0.99,
+            "summary": "Delivery took 80 min vs 30 min promised (+50 min late).",
+            "details": {
+              "travel_baseline_source": "eta_model",
+              "travel_delay_minutes": 55.9,
+              "prep_minutes": 12,
+              "prep_promised_minutes": 10,
+              "prep_delay_minutes": 2,
+              "delivery_minutes": 80,
+              "delivery_promised_minutes": 30,
+              "delivery_delay_minutes": 50,
+              "eta_model_used": true,
+              "eta_fallback_reason": null,
+              "predicted_delivery_minutes": 19.1,
+              "predicted_delay_minutes": -10.9,
+              "prediction_source": "combined_delivery_random_forest",
+              "stage_breached": "delivery"
+            }
+          },
+          {
+            "check_name": "rider_route",
+            "flagged": true,
+            "confidence": 0.85,
+            "summary": "Rider route issues detected: long_detour, long_stationary_stop.",
+            "details": {
+              "total_distance_km": 3.77,
+              "straight_line_km": 1.57,
+              "detour_ratio": 2.41,
+              "max_stationary_minutes": 25,
+              "stationary_points": [
+                {
+                  "lat": 6.9,
+                  "lng": 79.8,
+                  "minutes": 25
+                }
+              ],
+              "dropoff_distance_from_address_m": 0,
+              "issues": [
+                "long_detour",
+                "long_stationary_stop"
+              ]
+            }
+          },
+          {
+            "check_name": "zone",
+            "flagged": false,
+            "confidence": 0.85,
+            "summary": "Only 0% of open orders are late in zone ML_VERIFY_6dcfe22f_RIDER; no zone-wide pattern.",
+            "details": {
+              "zone_id": "ML_VERIFY_6dcfe22f_RIDER",
+              "open_orders_count": 10,
+              "late_orders_count": 0,
+              "average_delay_minutes": 0,
+              "late_ratio": 0,
+              "threshold": 0.3,
+              "zone_wide_delay": false,
+              "traffic_level": "Low"
+            }
+          },
+          {
+            "check_name": "claim_history",
+            "flagged": false,
+            "confidence": 0.8,
+            "summary": "Customer has 0 claims in the last 90 days; no unusual pattern.",
+            "details": {
+              "claims_last_90_days": 0,
+              "approved_ratio": 0,
+              "reason_diversity": 0,
+              "risk_score": 0,
+              "risk_flags": []
+            }
+          },
+          {
+            "check_name": "photo",
+            "flagged": false,
+            "confidence": 0,
+            "summary": "No photo submitted with this case.",
+            "details": {
+              "match": null,
+              "expected_items": [],
+              "detected_items": [],
+              "damage_detected": false
+            }
+          }
+        ],
+        "verdict": {
+          "claim_valid": true,
+          "fault_party": "rider",
+          "confidence": 0.840425583415283,
+          "outcome": "SUPPORT_TICKET",
+          "reasons": [
+            {
+              "check": "timing",
+              "reason": "Delivery took 80 min vs 30 min promised (+50 min late)."
+            },
+            {
+              "check": "rider_route",
+              "reason": "Rider route issues detected: long_detour, long_stationary_stop."
+            },
+            {
+              "check": "zone",
+              "reason": "Only 0% of open orders are late in zone ML_VERIFY_6dcfe22f_RIDER; no zone-wide pattern."
+            },
+            {
+              "check": "claim_history",
+              "reason": "Customer has 0 claims in the last 90 days; no unusual pattern."
+            },
+            {
+              "check": "photo",
+              "reason": "No photo submitted with this case."
+            }
+          ],
+          "label_provenance": "Synthetic/pseudo-labelled incident scenarios derived from public/synthetic delivery datasets; not genuine historical fault determinations.",
+          "model_used": true,
+          "model_name": "fault_classifier",
+          "model_version": "2.0-synthetic",
+          "model_prediction": "RIDER",
+          "fault_prediction": "RIDER",
+          "fault_confidence": 0.840425583415283,
+          "resolution": "SUPPORT_TICKET",
+          "class_probabilities": {
+            "EXTERNAL": 0.03476919312943137,
+            "MERCHANT": 0.045597100465103214,
+            "NEITHER": 0.0792081229901826,
+            "RIDER": 0.840425583415283
+          },
+          "features": {
+            "prep_delay_min": 2,
+            "pickup_delay_min": 3,
+            "travel_delay_min": 55.9,
+            "route_deviation_km": 2.2,
+            "stationary_time_min": 25,
+            "zone_late_percentage": 0,
+            "zone_average_delay_min": 0
+          },
+          "feature_names": [
+            "prep_delay_min",
+            "pickup_delay_min",
+            "travel_delay_min",
+            "route_deviation_km",
+            "stationary_time_min",
+            "zone_late_percentage",
+            "zone_average_delay_min"
+          ],
+          "feature_vector": [
+            2,
+            3,
+            55.9,
+            2.2,
+            25,
+            0,
+            0
+          ],
+          "fallback_reason": null
+        },
+        "eta": {
+          "predicted_minutes": 19.1,
+          "model_used": true,
+          "fallback_reason": null
+        },
+        "fault": {
+          "prediction": "RIDER",
+          "confidence": 0.840425583415283,
+          "confidence_level": "Moderate",
+          "model_used": true,
+          "class_probabilities": {
+            "EXTERNAL": 0.03476919312943137,
+            "MERCHANT": 0.045597100465103214,
+            "NEITHER": 0.0792081229901826,
+            "RIDER": 0.840425583415283
+          },
+          "fallback_reason": null
+        },
+        "resolution": {
+          "action": "SUPPORT_TICKET"
+        }
+      },
+      "checks": {
+        "model_used": true,
+        "prediction_matches": true,
+        "probabilities_sum_one": true,
+        "confidence_is_max_probability": true,
+        "get_verdict_matches": true,
+        "db_verdict_matches": true,
+        "db_fault_matches": true,
+        "separate_eta_fault_resolution": true,
+        "support_ticket_persisted": true,
+        "db_case_aggregated": true
+      },
+      "frontend_checks": {
+        "prediction": true,
+        "confidence": true,
+        "probabilities": true,
+        "support_review": true,
+        "evidence": true,
+        "eta_separate": true,
+        "provenance": true
+      },
+      "previous_case_id": "5b8e56c0-490e-4799-884f-8745d3522870"
+    },
+    {
+      "expected": "EXTERNAL",
+      "order_id": "ee3e0b21-1afb-481a-8595-2450fdb74634",
+      "zone_id": "ML_VERIFY_6dcfe22f_EXTERNAL",
+      "background_order_ids": [
+        "c5655c81-ef7b-48cd-bf65-c622d89f01d4",
+        "83f88d51-e0d4-4671-a65b-7e22a9b79336",
+        "e9782514-a16d-404a-bd7d-f34ceb6184d2",
+        "f87a696f-c912-4687-8bdc-065a0866608e",
+        "8bf6424f-d207-46f9-b9f9-ad2d9b4d735a",
+        "0bcec0ff-57da-45b6-a657-e2941823f499",
+        "d461b6a3-b79e-4e2b-9ebc-b7685a2cf39c",
+        "3eed936e-7769-4e49-92a0-118642ea27ce",
+        "ff18821d-9903-454e-8768-a75a3d7ba643",
+        "0bfd2582-c669-488e-820d-3b8385570a04"
+      ],
+      "http_status": 503,
+      "error": "Fault analysis completed, but its verdict could not be saved. Apply the EXTERNAL fault constraint migration.",
+      "case_id": "73c777dc-0ea2-419a-820c-3af3608c9223",
+      "unsaved_verdict": {
+        "claim_valid": true,
+        "fault_party": "external",
+        "confidence": 0.890038848673798,
+        "outcome": "ZONE_BROADCAST",
+        "reasons": [
+          {
+            "check": "timing",
+            "reason": "Delivery took 80 min vs 30 min promised (+50 min late)."
+          },
+          {
+            "check": "rider_route",
+            "reason": "Rider route looks normal \u2014 no detours or unusual stops."
+          },
+          {
+            "check": "zone",
+            "reason": "8/10 open orders (80%) are late in zone ML_VERIFY_6dcfe22f_EXTERNAL \u2014 likely zone-wide delay."
+          },
+          {
+            "check": "claim_history",
+            "reason": "Customer has 0 claims in the last 90 days; no unusual pattern."
+          },
+          {
+            "check": "photo",
+            "reason": "No photo submitted with this case."
+          }
+        ],
+        "label_provenance": "Synthetic/pseudo-labelled incident scenarios derived from public/synthetic delivery datasets; not genuine historical fault determinations.",
+        "model_used": true,
+        "model_name": "fault_classifier",
+        "model_version": "2.0-synthetic",
+        "model_prediction": "EXTERNAL",
+        "fault_prediction": "EXTERNAL",
+        "fault_confidence": 0.890038848673798,
+        "resolution": "ZONE_BROADCAST",
+        "class_probabilities": {
+          "EXTERNAL": 0.890038848673798,
+          "MERCHANT": 0.02110960459257971,
+          "NEITHER": 0.03797336895150016,
+          "RIDER": 0.050878177782122114
+        },
+        "features": {
+          "prep_delay_min": 2,
+          "pickup_delay_min": 3,
+          "travel_delay_min": 47.6,
+          "route_deviation_km": 0,
+          "stationary_time_min": 0,
+          "zone_late_percentage": 80,
+          "zone_average_delay_min": 29.33
+        },
+        "feature_names": [
+          "prep_delay_min",
+          "pickup_delay_min",
+          "travel_delay_min",
+          "route_deviation_km",
+          "stationary_time_min",
+          "zone_late_percentage",
+          "zone_average_delay_min"
+        ],
+        "feature_vector": [
+          2,
+          3,
+          47.6,
+          0,
+          0,
+          80,
+          29.33
+        ],
+        "fallback_reason": null
+      },
+      "previous_case_id": "8e0078bc-fe15-4b22-b8c0-f3dca15c8166",
+      "pending_get_verified": true,
+      "frontend_blocked": "No persisted verdict: migration required"
+    },
+    {
+      "expected": "NEITHER",
+      "order_id": "7bef4066-ce7f-47f0-811a-59547dbcbfca",
+      "zone_id": "ML_VERIFY_6dcfe22f_NEITHER",
+      "background_order_ids": [
+        "3734705b-d395-4008-ad44-70ab643d17de",
+        "d2b9680d-ce65-432b-aea6-0dbf09641fec",
+        "da39bdfd-d717-4d1b-8e70-b42e761cc8ef",
+        "760dea07-453a-4424-9317-6b6f01713bb3",
+        "7c266b8c-066f-4809-9bf1-346991314340",
+        "340c8a8b-f352-4df0-bd33-6891d60923d0",
+        "eb2ad170-7071-4ea7-b5da-fdf8a207dc78",
+        "cba4d21c-d1c3-431a-973d-6f6d0f7b1b45",
+        "e84c79d8-e6fd-4221-846f-a9e958a9f6dd",
+        "46d5ebe3-83fb-48dc-8629-db4ea748792e"
+      ],
+      "http_status": 200,
+      "case_id": "ea91701b-5170-421f-ba74-d91f1e905fb5",
+      "response": {
+        "case_id": "ea91701b-5170-421f-ba74-d91f1e905fb5",
+        "status": "aggregated",
+        "case": {
+          "case_id": "ea91701b-5170-421f-ba74-d91f1e905fb5",
+          "trigger": "customer_complaint",
+          "order": {
+            "id": "7bef4066-ce7f-47f0-811a-59547dbcbfca",
+            "status": "dropped_off",
+            "zone_id": "ML_VERIFY_6dcfe22f_NEITHER",
+            "items": [
+              {
+                "name": "Demo meal",
+                "qty": 1,
+                "price": 10
+              }
+            ],
+            "promised_prep_minutes": 10,
+            "promised_delivery_minutes": 30,
+            "timestamps": {
+              "placed_at": "2026-09-12T12:00:00Z",
+              "prep_started_at": "2026-09-12T12:00:00Z",
+              "ready_at": "2026-09-12T12:12:00Z",
+              "picked_up_at": "2026-09-12T12:15:00Z",
+              "dropped_off_at": "2026-09-12T12:30:00Z"
+            }
+          },
+          "merchant": {
+            "id": "d04c4fea-790e-44fc-83ac-ea3b5dc3d9e9",
+            "name": "ML verification 6dcfe22f NEITHER",
+            "zone_id": "ML_VERIFY_6dcfe22f_NEITHER",
+            "lat": 6.9,
+            "lng": 79.8,
+            "avg_prep_minutes": 10
+          },
+          "rider": {
+            "id": "dac7596f-aacb-489c-8e81-8d662ddfbaac",
+            "name": "ML verification 6dcfe22f",
+            "vehicle": "bike"
+          },
+          "rider_gps_trail": [
+            {
+              "lat": 6.9,
+              "lng": 79.8,
+              "speed_kmh": null,
+              "recorded_at": "2026-09-12T12:15:00Z"
+            },
+            {
+              "lat": 6.9,
+              "lng": 79.8,
+              "speed_kmh": null,
+              "recorded_at": "2026-09-12T12:15:00Z"
+            },
+            {
+              "lat": 6.91,
+              "lng": 79.81,
+              "speed_kmh": null,
+              "recorded_at": "2026-09-12T12:30:00Z"
+            }
+          ],
+          "customer": {
+            "id": "33d296ea-f756-4d21-bfe0-9dea65afed36",
+            "name": "ML verification 6dcfe22f",
+            "address": "Demo test only",
+            "lat": 6.91,
+            "lng": 79.81
+          },
+          "customer_refund_history": [],
+          "complaint": {
+            "id": "d69e3ad2-6b23-46f3-afab-5e454ab5549c",
+            "type": "late",
+            "description": "Final live verification 6dcfe22f",
+            "photo_url": null
+          },
+          "zone_snapshot": {
+            "zone_id": "ML_VERIFY_6dcfe22f_NEITHER",
+            "open_orders_count": 10,
+            "average_delay_minutes": 0,
+            "late_orders_count": 0
+          }
+        },
+        "check_results": [
+          {
+            "check_name": "timing",
+            "flagged": false,
+            "confidence": 0.9,
+            "summary": "Order stages were within promised SLAs.",
+            "details": {
+              "travel_baseline_source": "eta_model",
+              "travel_delay_minutes": 5.9,
+              "prep_minutes": 12,
+              "prep_promised_minutes": 10,
+              "prep_delay_minutes": 2,
+              "delivery_minutes": 30,
+              "delivery_promised_minutes": 30,
+              "delivery_delay_minutes": 0,
+              "eta_model_used": true,
+              "eta_fallback_reason": null,
+              "predicted_delivery_minutes": 19.1,
+              "predicted_delay_minutes": -10.9,
+              "prediction_source": "combined_delivery_random_forest",
+              "stage_breached": "none"
+            }
+          },
+          {
+            "check_name": "rider_route",
+            "flagged": false,
+            "confidence": 0.85,
+            "summary": "Rider route looks normal \u2014 no detours or unusual stops.",
+            "details": {
+              "total_distance_km": 1.57,
+              "straight_line_km": 1.57,
+              "detour_ratio": 1,
+              "max_stationary_minutes": 0,
+              "stationary_points": [],
+              "dropoff_distance_from_address_m": 0,
+              "issues": []
+            }
+          },
+          {
+            "check_name": "zone",
+            "flagged": false,
+            "confidence": 0.85,
+            "summary": "Only 0% of open orders are late in zone ML_VERIFY_6dcfe22f_NEITHER; no zone-wide pattern.",
+            "details": {
+              "zone_id": "ML_VERIFY_6dcfe22f_NEITHER",
+              "open_orders_count": 10,
+              "late_orders_count": 0,
+              "average_delay_minutes": 0,
+              "late_ratio": 0,
+              "threshold": 0.3,
+              "zone_wide_delay": false,
+              "traffic_level": "Low"
+            }
+          },
+          {
+            "check_name": "claim_history",
+            "flagged": false,
+            "confidence": 0.8,
+            "summary": "Customer has 0 claims in the last 90 days; no unusual pattern.",
+            "details": {
+              "claims_last_90_days": 0,
+              "approved_ratio": 0,
+              "reason_diversity": 0,
+              "risk_score": 0,
+              "risk_flags": []
+            }
+          },
+          {
+            "check_name": "photo",
+            "flagged": false,
+            "confidence": 0,
+            "summary": "No photo submitted with this case.",
+            "details": {
+              "match": null,
+              "expected_items": [],
+              "detected_items": [],
+              "damage_detected": false
+            }
+          }
+        ],
+        "verdict": {
+          "claim_valid": false,
+          "fault_party": "neither",
+          "confidence": 0.7989274436092134,
+          "outcome": "SUPPORT_TICKET",
+          "reasons": [
+            {
+              "check": "timing",
+              "reason": "Order stages were within promised SLAs."
+            },
+            {
+              "check": "rider_route",
+              "reason": "Rider route looks normal \u2014 no detours or unusual stops."
+            },
+            {
+              "check": "zone",
+              "reason": "Only 0% of open orders are late in zone ML_VERIFY_6dcfe22f_NEITHER; no zone-wide pattern."
+            },
+            {
+              "check": "claim_history",
+              "reason": "Customer has 0 claims in the last 90 days; no unusual pattern."
+            },
+            {
+              "check": "photo",
+              "reason": "No photo submitted with this case."
+            }
+          ],
+          "label_provenance": "Synthetic/pseudo-labelled incident scenarios derived from public/synthetic delivery datasets; not genuine historical fault determinations.",
+          "model_used": true,
+          "model_name": "fault_classifier",
+          "model_version": "2.0-synthetic",
+          "model_prediction": "NEITHER",
+          "fault_prediction": "NEITHER",
+          "fault_confidence": 0.7989274436092134,
+          "resolution": "SUPPORT_TICKET",
+          "class_probabilities": {
+            "EXTERNAL": 0.029375738923891326,
+            "MERCHANT": 0.1369640456611514,
+            "NEITHER": 0.7989274436092134,
+            "RIDER": 0.03473277180574364
+          },
+          "features": {
+            "prep_delay_min": 2,
+            "pickup_delay_min": 3,
+            "travel_delay_min": 5.9,
+            "route_deviation_km": 0,
+            "stationary_time_min": 0,
+            "zone_late_percentage": 0,
+            "zone_average_delay_min": 0
+          },
+          "feature_names": [
+            "prep_delay_min",
+            "pickup_delay_min",
+            "travel_delay_min",
+            "route_deviation_km",
+            "stationary_time_min",
+            "zone_late_percentage",
+            "zone_average_delay_min"
+          ],
+          "feature_vector": [
+            2,
+            3,
+            5.9,
+            0,
+            0,
+            0,
+            0
+          ],
+          "fallback_reason": null
+        },
+        "eta": {
+          "predicted_minutes": 19.1,
+          "model_used": true,
+          "fallback_reason": null
+        },
+        "fault": {
+          "prediction": "NEITHER",
+          "confidence": 0.7989274436092134,
+          "confidence_level": "Moderate",
+          "model_used": true,
+          "class_probabilities": {
+            "EXTERNAL": 0.029375738923891326,
+            "MERCHANT": 0.1369640456611514,
+            "NEITHER": 0.7989274436092134,
+            "RIDER": 0.03473277180574364
+          },
+          "fallback_reason": null
+        },
+        "resolution": {
+          "action": "SUPPORT_TICKET"
+        }
+      },
+      "checks": {
+        "model_used": true,
+        "prediction_matches": true,
+        "probabilities_sum_one": true,
+        "confidence_is_max_probability": true,
+        "get_verdict_matches": true,
+        "db_verdict_matches": true,
+        "db_fault_matches": true,
+        "separate_eta_fault_resolution": true,
+        "support_ticket_persisted": true,
+        "db_case_aggregated": true
+      },
+      "frontend_checks": {
+        "prediction": true,
+        "confidence": true,
+        "probabilities": true,
+        "support_review": true,
+        "evidence": true,
+        "eta_separate": true,
+        "provenance": true
+      },
+      "previous_case_id": "79b0d9cf-aa8d-4987-9db5-9065782ba329"
+    }
+  ],
+  "model_status": {
+    "fault_model": {
+      "loaded": true,
+      "type": "RandomForestClassifier",
+      "model_name": "fault_classifier",
+      "model_version": "2.0-synthetic",
+      "features": 7,
+      "feature_names": [
+        "prep_delay_min",
+        "pickup_delay_min",
+        "travel_delay_min",
+        "route_deviation_km",
+        "stationary_time_min",
+        "zone_late_percentage",
+        "zone_average_delay_min"
+      ],
+      "classes": [
+        "EXTERNAL",
+        "MERCHANT",
+        "NEITHER",
+        "RIDER"
+      ],
+      "labels": "Synthetic/pseudo-labelled incident scenarios derived from public/synthetic delivery datasets; not genuine historical fault determinations.",
+      "fallback_reason": null
+    },
+    "fault_model_loaded": true,
+    "fraud_model_loaded": false,
+    "fault_model_type": "RandomForestClassifier",
+    "model_name": "fault_classifier",
+    "model_version": "2.0-synthetic",
+    "label_provenance": "Synthetic/pseudo-labelled incident scenarios derived from public/synthetic delivery datasets; not genuine historical fault determinations.",
+    "classes": [
+      "EXTERNAL",
+      "MERCHANT",
+      "NEITHER",
+      "RIDER"
+    ],
+    "feature_count": 7,
+    "feature_names": [
+      "prep_delay_min",
+      "pickup_delay_min",
+      "travel_delay_min",
+      "route_deviation_km",
+      "stationary_time_min",
+      "zone_late_percentage",
+      "zone_average_delay_min"
+    ],
+    "fallback_reason": null,
+    "eta_model_loaded": true,
+    "eta_model_type": "RandomForestRegressor",
+    "eta_model": {
+      "model_name": "delivery_eta",
+      "model_version": "2.0",
+      "test_metrics": {
+        "mae_min": 4.489861756384941,
+        "rmse_min": 6.06277940735845,
+        "r2": 0.9756518429218987
+      },
+      "test_metrics_by_source": {
+        "kaggle_synthetic": {
+          "mae_min": 3.717383835636801,
+          "rmse_min": 5.318656141819159,
+          "r2": 0.9772284872410365
+        },
+        "zomato": {
+          "mae_min": 5.337155735487868,
+          "rmse_min": 6.785775085332916,
+          "r2": 0.47058690331299624
+        }
+      },
+      "limitations": "Mixed straight-line/road distances and pickup/prep proxies; live weather is unavailable. Evaluate on live operations before production use.",
+      "loaded": true,
+      "type": "RandomForestRegressor",
+      "features": [
+        "distance_km",
+        "prep_time_min",
+        "order_hour",
+        "is_weekend",
+        "weather",
+        "traffic",
+        "vehicle"
+      ],
+      "training_sources": [
+        "zomato",
+        "kaggle_synthetic"
+      ],
+      "zomato_mae_minutes": 5.337155735487868,
+      "kaggle_mae_minutes": 3.717383835636801,
+      "fallback_reason": null
+    }
+  },
+  "confidence_varies": true,
+  "passed": false,
+  "browser_errors": [],
+  "remaining_blocker": "Applying verified verdicts_fault_party_check migration requires configured DATABASE_URL or SUPABASE_ACCESS_TOKEN"
+}

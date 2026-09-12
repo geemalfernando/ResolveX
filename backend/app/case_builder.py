@@ -5,6 +5,9 @@ refund history into one Case object. See docs/case_contract.md section 1.
 from __future__ import annotations
 
 import uuid
+from datetime import datetime, timezone
+
+from pydantic import TypeAdapter
 
 from .db import get_supabase
 from .models import (
@@ -24,11 +27,14 @@ from .models import (
 )
 
 
+_timestamp = TypeAdapter(datetime)
+
+
 def _zone_snapshot(zone_id: str) -> ZoneSnapshot:
     sb = get_supabase()
     open_orders = (
         sb.table("orders")
-        .select("id, is_late_flagged", count="exact")
+        .select("id, is_late_flagged, placed_at, promised_delivery_minutes", count="exact")
         .eq("zone_id", zone_id)
         .in_("status", ["placed", "preparing", "ready", "picked_up"])
         .execute()
@@ -36,7 +42,11 @@ def _zone_snapshot(zone_id: str) -> ZoneSnapshot:
     rows = open_orders.data or []
     open_count = len(rows)
     late_count = sum(1 for r in rows if r.get("is_late_flagged"))
-    return ZoneSnapshot(zone_id=zone_id, open_orders_count=open_count, late_orders_count=late_count)
+    now = datetime.now(timezone.utc)
+    delays = [max(0, (now - _timestamp.validate_python(r["placed_at"])).total_seconds() / 60 - r["promised_delivery_minutes"])
+              for r in rows if r.get("placed_at") and r.get("promised_delivery_minutes") is not None]
+    return ZoneSnapshot(zone_id=zone_id, open_orders_count=open_count, late_orders_count=late_count,
+                        average_delay_minutes=round(sum(delays) / len(delays), 2) if delays else None)
 
 
 def build_case(
@@ -54,6 +64,10 @@ def build_case(
 
     merchant_row = sb.table("merchants").select("*").eq("id", order_row["merchant_id"]).single().execute().data
     customer_row = sb.table("customers").select("*").eq("id", order_row["customer_id"]).single().execute().data
+
+    delivery = (order_row.get("items") or [{}])[0].get("delivery")
+    if delivery:
+        customer_row = {**customer_row, **{k: delivery[k] for k in ("address", "lat", "lng")}}
 
     rider_row = None
     gps_rows = []
@@ -79,6 +93,9 @@ def build_case(
 
     complaint_snapshot = None
     if complaint_type is not None:
+        # NOTE: the complaint row itself is persisted by routers/cases.py::create_case
+        # (alongside the /cases/upload-photo flow) — this just builds the in-memory
+        # snapshot with the id that call site will actually insert.
         complaint_snapshot = ComplaintSnapshot(
             id=str(uuid.uuid4()),
             type=complaint_type,

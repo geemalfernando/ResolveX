@@ -5,7 +5,7 @@ Built for CodeArena'26, Topic 3 — "Managing last-mile delivery problems in rea
 
 ResolveX watches live deliveries, flags problems before customers even complain, assembles
 a full case (order, timestamps, rider GPS trail, merchant, refund history), runs it through
-five checks, and has a single AI Fairness Aggregator call decide the outcome: an instant
+five checks, predicts responsibility with a local trained classifier, and applies resolution rules for an instant
 refund, a zone-wide delay notice, one more question for the customer, or a ticket for a human
 support agent.
 
@@ -23,18 +23,17 @@ support agent.
                                        |      rider GPS trail, merchant, customer,
                                        |      refund history  --> Case object
                                        |
-                                       |--> 5 CHECKS (run in parallel over the Case)
-                                       |      - PHOTO         (AI: Gemini 2.5 Flash, multimodal)
-                                       |      - TIMING        (plain code)
+                                       |--> 5 CHECKS (evidence from the Case)
+                                       |      - PHOTO         (AI: Gemini 3.6 Flash, multimodal)
+                                       |      - TIMING        (local ETA model + timestamps)
                                        |      - RIDER_ROUTE   (plain code geometry)
                                        |      - ZONE          (plain code)
                                        |      - CLAIM_HISTORY (plain code / rules)
                                        |
-                                       |--> FAIRNESS AGGREGATOR (AI: 1 Gemini call)
+                                       |--> FAULT CLASSIFIER + FAIRNESS RULES
                                        |      strict JSON verdict: claim_valid, fault_party,
                                        |      confidence, outcome, reasons[]
-                                       |      backend enforces: confidence < 0.6 or disputed
-                                       |      fault -> outcome forced to SUPPORT_TICKET
+                                       |      predict + predict_proba -> resolution constraints
                                        |
                                        v
                               4 possible outcomes
@@ -63,14 +62,14 @@ the frontend never talks to Gemini directly.
 ```
 resolvex/
 ├── frontend/        React + Vite + Tailwind. Routes: / (CustomerApp), /ops (OpsDashboard),
-│                    /partner (PartnerPortal), /support (SupportQueue). Leaflet + OSM map,
+│                    /partner (PartnerPortal), /claims (ClaimRiskBoard). Leaflet + OSM map,
 │                    wired to Supabase Realtime.
 ├── backend/         FastAPI app.
 │   └── app/
 │       ├── routers/        cases.py, checks.py, aggregator.py, orders.py
 │       ├── checks/         timing.py, zone.py, claim_history.py, rider_route.py (real logic),
 │       │                   photo.py (Gemini stub)
-│       ├── aggregator/     prompt.py, schema.py, aggregator.py (Gemini stub + outcome overrides)
+│       ├── aggregator/     aggregator.py (fault inference + resolution constraints)
 │       ├── case_builder.py Case Builder — assembles the Case object from Supabase
 │       ├── models.py       Pydantic schemas shared across the pipeline
 │       ├── db.py, config.py
@@ -139,7 +138,7 @@ npm run dev
 ```
 
 Open http://localhost:5173. `/` is the customer complaint form (phone width), `/ops` is the
-live ops map, `/partner` is the merchant portal, `/support` is the human agent queue.
+live ops map, `/partner` is the merchant portal, `/claims` is claim-history risk + admin Approve/Deny.
 
 ### 5. Seed data + live replay
 
@@ -164,29 +163,26 @@ through the replay you'll see console lines like:
 ⛈️  ZONE-WIDE DELAY in ZONE_B: 3/10 open orders late (30%) -> trigger a zone_delay case for a ZONE_BROADCAST demo
 ```
 
-### Demoing all four outcomes
+### Training and verifying the models
 
-| Outcome           | How to trigger it                                                                 |
-|--------------------|-------------------------------------------------------------------------------------|
-| `ZONE_BROADCAST`   | Run `replay_feed.py`; once `ZONE_B` crosses the late-ratio threshold, `POST /cases` with `trigger: "zone_delay"` for any open `ZONE_B` order. |
-| `AUTO_REFUND`      | File a complaint (via the Customer App or `POST /cases`) against a normal, on-time order with a clean claim history and a photo that doesn't match the order — PHOTO + TIMING agree, confidence is high. |
-| `SUPPORT_TICKET`   | File a complaint against the seeded rider-detour order — RIDER_ROUTE flags the rider while ZONE may not, or confidence lands under 0.6. |
-| `NEED_MORE_INFO`   | File a complaint with no `photo_url` — the PHOTO check has nothing to compare, so the aggregator asks for another photo. |
+See [the training and inference guide](docs/fault_inference.md) for local dataset paths,
+reproducible commands and model evaluation. Both datasets are installed locally; the
+fault classifier uses controlled noisy scenarios derived from those operational rows.
+They do not provide historical fault labels. Model metadata and the UI disclose this.
 
-## Wiring up Gemini
+`GET /api/model/status` reports ETA/fault loading state. The API returns predicted
+responsibility, model probabilities and resolution separately. Missing photos only
+block photo-relevant complaints. Run the saved-artifact API tests to exercise all four
+fault classes; model confidence and business constraints determine the final outcome.
 
-Both AI call sites are stubbed so the rest of the pipeline runs end-to-end without a key:
+### Photo evidence
 
-- [`backend/app/checks/photo.py`](backend/app/checks/photo.py) — `_call_gemini(...)`
-- [`backend/app/aggregator/aggregator.py`](backend/app/aggregator/aggregator.py) — `_call_gemini(...)`
-
-Each stub has a `TODO` comment with the exact `google-genai` client call to drop in once
-`GEMINI_API_KEY` is set in `.env`. The aggregator's structured-output schema is already
-defined in [`backend/app/aggregator/schema.py`](backend/app/aggregator/schema.py).
+`backend/app/checks/photo.py` uses Gemini when configured with `GEMINI_API_KEY`.
+Unavailable photo analysis is marked inconclusive. Final fault inference runs locally.
 
 ## Contracts
 
 See [`docs/case_contract.md`](docs/case_contract.md) and
 [`docs/aggregator_contract.md`](docs/aggregator_contract.md) for the exact JSON shapes
 passed between the Case Builder, the five checks, and the Fairness Aggregator — read these
-before changing any check's output shape, since the aggregator prompt embeds them verbatim.
+before changing any check's output shape, since model features are extracted from them.

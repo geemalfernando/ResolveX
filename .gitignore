@@ -20,9 +20,15 @@ yarn-error.log*
 
 # Scripts output
 scripts/seed_output/
+backend/app/ml/eta_model.joblib
 
 # Editors / OS
 .vscode/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Reproducible local training data and binary artifacts
+data/external/**/*.csv
+data/processed/*.csv
+backend/app/ml/fault_model.joblib

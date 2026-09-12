@@ -4,7 +4,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
 
 
 # ---------------------------------------------------------------------------
@@ -17,6 +17,8 @@ class ComplaintType(str, Enum):
     wrong_item = "wrong_item"
     damaged = "damaged"
     missing_item = "missing_item"
+    not_delivered = "not_delivered"
+    tampering = "tampering"
 
 
 class CaseTrigger(str, Enum):
@@ -29,7 +31,6 @@ class FaultParty(str, Enum):
     merchant = "merchant"
     rider = "rider"
     neither = "neither"
-    customer_abuse = "customer_abuse"
 
 
 class Outcome(str, Enum):
@@ -37,6 +38,7 @@ class Outcome(str, Enum):
     auto_refund = "AUTO_REFUND"
     zone_broadcast = "ZONE_BROADCAST"
     support_ticket = "SUPPORT_TICKET"
+    no_action = "NO_ACTION"
 
 
 class CheckName(str, Enum):
@@ -123,6 +125,7 @@ class ComplaintSnapshot(BaseModel):
 class ZoneSnapshot(BaseModel):
     zone_id: str
     open_orders_count: int
+    average_delay_minutes: Optional[float] = Field(default=None, ge=0)
     late_orders_count: int
 
 
@@ -137,6 +140,7 @@ class Case(BaseModel):
     customer_refund_history: list[RefundHistoryEntry] = Field(default_factory=list)
     complaint: Optional[ComplaintSnapshot] = None
     zone_snapshot: ZoneSnapshot
+    workflow: dict[str, Any] = Field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------------
@@ -168,11 +172,26 @@ class VerdictReason(BaseModel):
 
 
 class Verdict(BaseModel):
+    cause_category: Optional[str] = None
+    claim_assessment: dict[str, Any] = Field(default_factory=dict)
     claim_valid: bool
     fault_party: FaultParty
     confidence: float = Field(ge=0.0, le=1.0)
     outcome: Outcome
     reasons: list[VerdictReason]
+    label_provenance: Optional[str] = None
+    model_used: bool = False
+    model_name: Optional[str] = None
+    model_version: Optional[str] = None
+    model_prediction: Optional[str] = None
+    fault_prediction: Optional[str] = None
+    fault_confidence: Optional[float] = Field(default=None, ge=0, le=1)
+    resolution: Optional[Outcome] = None
+    class_probabilities: dict[str, float] = Field(default_factory=dict)
+    features: dict[str, Optional[float]] = Field(default_factory=dict)
+    feature_names: list[str] = Field(default_factory=list)
+    feature_vector: list[Optional[float]] = Field(default_factory=list)
+    fallback_reason: Optional[str] = "Legacy verdict: ML inference was not recorded"
 
 
 # ---------------------------------------------------------------------------
@@ -194,3 +213,33 @@ class CaseResponse(BaseModel):
     case: Case
     check_results: list[CheckResult] = Field(default_factory=list)
     verdict: Optional[Verdict] = None
+
+
+    @computed_field
+    @property
+    def eta(self) -> dict[str, Any]:
+        timing = next((c for c in self.check_results if c.check_name == CheckName.timing), None)
+        details = timing.details if timing else {}
+        prediction = details.get("predicted_delivery_minutes")
+        used = details.get("eta_model_used", prediction is not None)
+        return {"predicted_minutes": prediction, "model_used": used,
+                "fallback_reason": details.get("eta_fallback_reason") if used else details.get("eta_fallback_reason", "ETA inference not recorded")}
+
+    @computed_field
+    @property
+    def fault(self) -> Optional[dict[str, Any]]:
+        if self.verdict is None:
+            return None
+        from .config import get_settings
+        settings = get_settings()
+        verdict = self.verdict
+        level = "High" if verdict.confidence >= settings.auto_action_confidence_threshold else "Moderate" if verdict.confidence >= settings.support_review_confidence_threshold else "Low"
+        return {"prediction": self.case.workflow.get("human_verdict", verdict.fault_party.value.upper()), "cause_category": verdict.cause_category,
+                "confidence": verdict.confidence, "confidence_level": level,
+                "model_used": verdict.model_used, "class_probabilities": verdict.class_probabilities,
+                "fallback_reason": verdict.fallback_reason}
+
+    @computed_field
+    @property
+    def resolution(self) -> Optional[dict[str, str]]:
+        return {"action": self.case.workflow.get("resolution_action", self.verdict.outcome.value)} if self.verdict else None

@@ -1,4 +1,5 @@
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -6,11 +7,20 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     """Central app config, loaded from environment variables / .env."""
 
-    model_config = SettingsConfigDict(env_file="../.env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=Path(__file__).resolve().parents[2] / ".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
     supabase_url: str = ""
     supabase_key: str = ""
+    supabase_publishable_key: str = ""
+    supabase_secret_key: str = ""
+    supabase_jwks_url: str = ""
     gemini_api_key: str = ""
+    photo_use_gemini: bool = True
+    aggregator_use_gemini: bool = True
 
     # ZONE check: fraction of open orders in a zone that must be late to flag zone-wide delay
     zone_late_ratio_threshold: float = 0.30
@@ -20,10 +30,23 @@ class Settings(BaseSettings):
     rider_stationary_minutes_threshold: float = 8.0
     rider_dropoff_distance_threshold_m: float = 150.0
 
-    # Aggregator
+    eta_model_path: str = str(Path(__file__).parent / "ml" / "eta_model.joblib")
+    fault_model_path: str = str(Path(__file__).parent / "ml" / "fault_model.joblib")
+    auto_action_confidence_threshold: float = 0.80
+
+    # Confidence bar for auto-resolving when the trained fault model isn't loaded and the
+    # rule-based fallback is deciding instead. Lower than auto_action_confidence_threshold
+    # because the fallback's confidence numbers are hand-picked heuristics, not a calibrated
+    # model's probabilities — e.g. it clears for an unambiguous zone-wide delay (0.8) but not
+    # for a single-signal merchant/rider guess (0.55).
+    rule_fallback_confidence_threshold: float = 0.75
+
+    support_review_confidence_threshold: float = 0.55
+
+    # Legacy aggregator setting retained for compatibility
     aggregator_confidence_threshold: float = 0.6
 
-    cors_origins: str = "http://localhost:5173"
+    cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 
 
 @lru_cache
