@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from typing import Literal, Optional
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
@@ -15,6 +16,31 @@ from .cases import get_case
 router = APIRouter(tags=["workflow"])
 
 
+def _claim_signal(payload: dict) -> dict:
+    checks_rows = payload.get("workflow", {}).get("checks", []) or []
+    check = next((row for row in checks_rows if row.get("check_name") == "claim_history"), None)
+    details = (check or {}).get("details", {}) or {}
+    risk = float(details.get("risk_score", details.get("risk_probability", 0)) or 0)
+    return {
+        "risk_score": risk,
+        "risk_flags": details.get("risk_flags", []) or [],
+        "claims_last_90_days": int(details.get("claims_last_90_days", 0) or 0),
+        "flagged": bool((check or {}).get("flagged")),
+    }
+
+
+def _case_record(row: dict) -> dict:
+    payload = row["case_payload"]
+    return dict(
+        case_id=row["id"],
+        status=row["status"],
+        case=payload,
+        verdict=payload.get("workflow", {}).get("verdict"),
+        check_results=payload.get("workflow", {}).get("checks", []),
+        claim_risk=_claim_signal(payload),
+    )
+
+
 def _list_cases(merchant_id: Optional[str] = None):
     all_rows = wf.rows("cases")
     selected = [
@@ -22,24 +48,35 @@ def _list_cases(merchant_id: Optional[str] = None):
         if not merchant_id or r["case_payload"]["merchant"]["id"] == merchant_id
     ]
     selected.sort(key=lambda r: r["created_at"], reverse=True)
-    return [
-        dict(
-            case_id=r["id"],
-            status=r["status"],
-            case=r["case_payload"],
-            verdict=r["case_payload"].get("workflow", {}).get("verdict"),
-            check_results=r["case_payload"].get("workflow", {}).get("checks", []),
-        )
-        for r in selected
-    ]
+    return [_case_record(r) for r in selected]
 
 
 @router.get("/workflow/cases")
 def list_cases(principal: AuthPrincipal = Depends(require_roles("partner", "support", "ops", "admin"))):
-    # A partner is always server-scoped to the merchant assigned to their account.
-    # Query-string merchant IDs are intentionally not accepted.
     merchant_id = principal.merchant_id if principal.role == "partner" else None
     return _list_cases(merchant_id)
+
+
+@router.get("/workflow/support")
+def support_queue(principal: AuthPrincipal = Depends(require_roles("support", "admin"))):
+    tickets = [
+        row for row in wf.rows("support_tickets")
+        if row["status"] in ("open", "in_progress")
+    ]
+    cases_by_id = {row["id"]: row for row in wf.rows("cases")}
+    records = []
+    for ticket in tickets:
+        row = cases_by_id.get(ticket["case_id"])
+        if not row:
+            continue
+        record = _case_record(row)
+        record["ticket"] = ticket
+        records.append(record)
+    records.sort(key=lambda r: r["ticket"].get("created_at") or "", reverse=True)
+    return {
+        "count": len(records),
+        "cases": records,
+    }
 
 
 class EvidenceBody(BaseModel):
@@ -242,6 +279,8 @@ def admin(principal: AuthPrincipal = Depends(require_roles("admin"))):
         cid = customer["id"]
         customer_cases = [r for r in cases if r["case_payload"]["customer"]["id"] == cid]
         claims = sum(bool(r["case_payload"].get("complaint")) for r in customer_cases)
+        signals = [_claim_signal(r["case_payload"]) for r in customer_cases]
+        highest = max(signals, key=lambda s: s["risk_score"], default={"risk_score": 0, "risk_flags": [], "claims_last_90_days": 0, "flagged": False})
         accounts.append(
             dict(
                 id=cid,
@@ -250,6 +289,7 @@ def admin(principal: AuthPrincipal = Depends(require_roles("admin"))):
                 claims=claims,
                 refunds=sum(r["customer_id"] == cid for r in refunds),
                 manual_review=any(r["case_payload"].get("workflow", {}).get("account_manual_review") for r in customer_cases),
+                claim_risk=highest,
             )
         )
     feedback = [f for c in cases for f in c["case_payload"].get("workflow", {}).get("feedback", [])]
@@ -262,11 +302,19 @@ def admin(principal: AuthPrincipal = Depends(require_roles("admin"))):
         if party in repeat and c["case_payload"].get(party):
             ident = c["case_payload"][party]["id"]
             repeat[party][ident] = repeat[party].get(ident, 0) + 1
+    risk_reviews = [
+        dict(
+            case_id=c["id"],
+            customer=c["case_payload"]["customer"]["name"],
+            **_claim_signal(c["case_payload"]),
+        )
+        for c in cases
+        if c["status"] != "resolved" and (_claim_signal(c["case_payload"])["flagged"] or _claim_signal(c["case_payload"])["risk_score"] >= 0.55)
+    ]
     return dict(
         refunds=[dict(case_id=c["id"], order_id=c["order_id"], customer=c["case_payload"]["customer"]["name"], **c["case_payload"]["workflow"]["refund"])
                  for c in cases if c["case_payload"].get("workflow", {}).get("refund")],
-        fraud_reviews=[dict(case_id=c["id"], customer=c["case_payload"]["customer"]["name"], **c["case_payload"]["workflow"]["fraud_screening"])
-                       for c in cases if c["status"] != "resolved" and c["case_payload"].get("workflow", {}).get("fraud_screening", {}).get("status") == "review_required"],
+        fraud_reviews=risk_reviews,
         accounts=accounts,
         reviewed_cases=len(reviewed),
         overrides=overrides,

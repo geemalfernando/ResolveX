@@ -1,4 +1,4 @@
-import { NavLink, Navigate, Route, Routes } from "react-router-dom";
+import { NavLink, Route, Routes } from "react-router-dom";
 
 import Storefront from "./pages/Storefront.jsx";
 import Signup from "./pages/Signup.jsx";
@@ -6,6 +6,7 @@ import OrderDashboard from "./pages/OrderDashboard.jsx";
 import CustomerApp from "./pages/CustomerApp.jsx";
 import OpsDashboard from "./pages/OpsDashboard.jsx";
 import PartnerPortal from "./pages/PartnerPortal.jsx";
+import SupportQueue from "./pages/SupportQueue.jsx";
 import Admin from "./pages/Admin.jsx";
 import ClaimRiskBoard from "./pages/ClaimRiskBoard.jsx";
 import Login from "./pages/Login.jsx";
@@ -24,7 +25,8 @@ const NAV = [
   { to: "/rider", label: "Deliveries", roles: ["rider", "admin"] },
   { to: "/ops", label: "Ops", roles: ["ops", "admin"] },
   { to: "/partner", label: "Partner", roles: ["partner", "admin"] },
-  { to: "/claims", label: "Claim Risk", roles: ["admin", "support"] },
+  { to: "/support", label: "Support", roles: ["support", "admin"] },
+  { to: "/claims", label: "Claim Risk", roles: ["support", "admin"] },
   { to: "/admin", label: "Admin", roles: ["admin"] },
 ];
 
@@ -78,7 +80,7 @@ export default function App() {
           <Route path="/rider" element={<ProtectedRoute allowedRoles={["rider", "admin"]}><OrderDashboard key="rider" mode="rider" /></ProtectedRoute>} />
           <Route path="/ops" element={<ProtectedRoute allowedRoles={["ops", "admin"]}><OpsDashboard /></ProtectedRoute>} />
           <Route path="/partner" element={<ProtectedRoute allowedRoles={["partner", "admin"]}><PartnerPortal /></ProtectedRoute>} />
-          <Route path="/support" element={<Navigate to="/claims" replace />} />
+          <Route path="/support" element={<ProtectedRoute allowedRoles={["support", "admin"]}><SupportQueue /></ProtectedRoute>} />
           <Route path="/claims" element={<ProtectedRoute allowedRoles={["admin", "support"]}><ClaimRiskBoard /></ProtectedRoute>} />
           <Route path="/admin" element={<ProtectedRoute allowedRoles={["admin"]}><Admin /></ProtectedRoute>} />
         </Routes>
