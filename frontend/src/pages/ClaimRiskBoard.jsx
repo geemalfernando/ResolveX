@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import ClaimRiskPanel, { AUTO_REFUND_RISK_MAX, pickClaimHistoryCheck } from "../components/ClaimRiskPanel.jsx";
 import OutcomeBadge, { outcomeLabel } from "../components/OutcomeBadge.jsx";
 import { supabase } from "../lib/supabaseClient";
-import { api, actionLabel, faultLabel } from "../lib/api";
+import { api } from "../lib/api";
 
 function riskTone(score) {
   if (score >= 75) return "bg-rose-50 text-rose-800 ring-rose-200";
@@ -17,6 +17,25 @@ const FILTERS = [
   { id: "resolved", label: "Resolved" },
   { id: "all", label: "All" },
 ];
+
+function claimDecision(outcome, riskPct) {
+  if (outcome === "AUTO_REFUND" || (outcome !== "SUPPORT_TICKET" && riskPct < AUTO_REFUND_RISK_MAX * 100)) {
+    return {
+      title: "Auto refund",
+      blurb: "Refund history looks legitimate, so the refund is issued instantly.",
+    };
+  }
+  if (outcome === "SUPPORT_TICKET" || riskPct >= AUTO_REFUND_RISK_MAX * 100) {
+    return {
+      title: "Hold for review",
+      blurb: "Unusual refund pattern. Approve or deny here. Kitchen disputes stay on Partner.",
+    };
+  }
+  return {
+    title: outcomeLabel(outcome),
+    blurb: "Claim-history AI scored this account before a refund was issued.",
+  };
+}
 
 export default function ClaimRiskBoard() {
   const [rows, setRows] = useState([]);
@@ -64,7 +83,7 @@ export default function ClaimRiskBoard() {
         const risk = Number(details.risk_score ?? details.risk_probability ?? 0);
         const payload = c.case_payload || {};
         const verdict = verdictByCase[c.id];
-        const needsReview = Boolean(check?.flagged) || risk >= AUTO_REFUND_RISK_MAX || verdict?.outcome === "SUPPORT_TICKET";
+        const needsReview = risk >= AUTO_REFUND_RISK_MAX || verdict?.outcome === "SUPPORT_TICKET";
         return {
           id: c.id,
           orderId: c.order_id,
@@ -135,6 +154,13 @@ export default function ClaimRiskBoard() {
   const resolved = selected?.status === "resolved" || ticket?.status === "resolved";
   const outcome = liveDetail?.verdict?.outcome ?? selected?.verdict?.outcome;
   const refund = liveDetail?.case?.workflow?.refund;
+  const riskPct = Math.round((selected?.risk ?? 0) * 100);
+  const decision = claimDecision(outcome, riskPct);
+  const historyReason =
+    liveDetail?.verdict?.reasons?.find((r) => r.check === "claim_history")?.reason ||
+    claimCheck?.result?.summary ||
+    claimCheck?.summary;
+  const patternLabel = riskPct >= AUTO_REFUND_RISK_MAX * 100 || selected?.needsReview ? "Unusual" : "Legitimate";
   const counts = {
     review: rows.filter((r) => r.needsReview && r.status !== "resolved").length,
     auto: rows.filter((r) => !r.needsReview).length,
@@ -142,20 +168,20 @@ export default function ClaimRiskBoard() {
     all: rows.length,
   };
 
-  async function decideRefund(decision) {
+  async function decideRefund(choice) {
     if (!selected) return;
     setBusy(true);
     setMessage(null);
     const notes =
-      decision === "approved"
+      choice === "approved"
         ? "Admin approved refund from Claim Risk board."
         : "Admin denied claim from Claim Risk board.";
     try {
       await api(`/cases/${selected.id}/support`, {
-        action: decision === "approved" ? "approve_refund" : "reject",
+        action: choice === "approved" ? "approve_refund" : "reject",
         reason: notes,
       });
-      setMessage(decision === "approved" ? `Refund approved for ${selected.customer}` : `Claim denied for ${selected.customer}`);
+      setMessage(choice === "approved" ? `Refund approved for ${selected.customer}` : `Claim denied for ${selected.customer}`);
       await loadBoard();
     } catch (err) {
       setMessage(err.message || "Could not save decision");
@@ -169,9 +195,10 @@ export default function ClaimRiskBoard() {
       <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-teal-700">Claim history · AI</p>
-          <h1 className="text-2xl font-bold tracking-tight">Review queue</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Refund legitimacy</h1>
           <p className="mt-1 text-sm text-slate-500">
-            Under {Math.round(AUTO_REFUND_RISK_MAX * 100)}% refunds automatically. {Math.round(AUTO_REFUND_RISK_MAX * 100)}%+ wait here for a manual decision.
+            This board does not assign kitchen or rider fault. It only checks whether the customer’s refund pattern looks legitimate.
+            Under {Math.round(AUTO_REFUND_RISK_MAX * 100)}% the refund is issued instantly. {Math.round(AUTO_REFUND_RISK_MAX * 100)}%+ is held here. Partner disputes stay on Partner.
           </p>
         </div>
         <div className="flex flex-wrap gap-1 rounded-full bg-slate-100 p-1">
@@ -236,14 +263,14 @@ export default function ClaimRiskBoard() {
             <div className="space-y-3">
               <section className="panel overflow-hidden">
                 <div className="bg-slate-900 px-5 py-4 text-white">
-                  <p className="text-xs uppercase tracking-[0.16em] text-teal-200">Decision</p>
+                  <p className="text-xs uppercase tracking-[0.16em] text-teal-200">Refund decision</p>
                   <div className="mt-2 flex flex-wrap items-end justify-between gap-3">
-                    <h2 className="text-2xl font-bold">{outcomeLabel(outcome)}</h2>
-                    <span className={`rounded-full px-3 py-1 text-lg font-bold tabular-nums ring-1 ${riskTone(Math.round(selected.risk * 100))}`}>
-                      {Math.round(selected.risk * 100)}% risk
+                    <h2 className="text-2xl font-bold">{decision.title}</h2>
+                    <span className={`rounded-full px-3 py-1 text-lg font-bold tabular-nums ring-1 ${riskTone(riskPct)}`}>
+                      {riskPct}% risk
                     </span>
                   </div>
-                  <p className="mt-2 text-sm text-slate-300">{actionLabel(outcome)}</p>
+                  <p className="mt-2 text-sm text-slate-300">{decision.blurb}</p>
                 </div>
                 <div className="grid gap-3 p-5 sm:grid-cols-3">
                   <div>
@@ -251,13 +278,17 @@ export default function ClaimRiskBoard() {
                     <p className="font-semibold">{selected.customer}</p>
                   </div>
                   <div>
-                    <p className="text-[11px] uppercase tracking-wide text-slate-500">Fault</p>
-                    <p className="font-semibold">{faultLabel((liveDetail?.verdict?.fault_party || selected.verdict?.fault_party || "").toUpperCase())}</p>
+                    <p className="text-[11px] uppercase tracking-wide text-slate-500">Refund pattern</p>
+                    <p className="font-semibold">{patternLabel}</p>
                   </div>
                   <div>
                     <p className="text-[11px] uppercase tracking-wide text-slate-500">Refund</p>
                     <p className="font-semibold">
-                      {refund ? `LKR ${Number(refund.amount).toLocaleString()} · ${refund.status}` : "Not issued"}
+                      {refund
+                        ? `LKR ${Number(refund.amount).toLocaleString()} · ${refund.status === "completed" ? "issued instantly" : refund.status}`
+                        : selected.needsReview
+                          ? "Held"
+                          : "Not issued"}
                     </p>
                   </div>
                 </div>
@@ -288,16 +319,10 @@ export default function ClaimRiskBoard() {
 
               <ClaimRiskPanel check={claimCheck} />
 
-              {liveDetail?.verdict?.reasons?.length > 0 && (
+              {historyReason && (
                 <section className="panel p-5">
                   <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Why this result</h3>
-                  <ul className="mt-3 space-y-2 text-sm text-slate-700">
-                    {liveDetail.verdict.reasons.map((r, i) => (
-                      <li key={`${r.check}-${i}`} className="rounded-xl bg-slate-50 px-3 py-2">
-                        <span className="font-semibold capitalize">{r.check.replaceAll("_", " ")}:</span> {r.reason}
-                      </li>
-                    ))}
-                  </ul>
+                  <p className="mt-3 rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700">{historyReason}</p>
                 </section>
               )}
             </div>

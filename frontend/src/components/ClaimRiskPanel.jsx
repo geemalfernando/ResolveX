@@ -40,7 +40,7 @@ export default function ClaimRiskPanel({ check, compact = false }) {
       <div className="flex items-center justify-between gap-2">
         <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Claim history · AI</div>
         <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${badge}`}>
-          {flagged || anomaly ? "Elevated risk" : "Normal pattern"}
+          {flagged || anomaly || riskScore >= AUTO_REFUND_RISK_MAX ? "Unusual pattern" : "Legitimate pattern"}
         </span>
       </div>
       <div className="mt-3 flex items-end justify-between gap-4">
@@ -59,7 +59,9 @@ export default function ClaimRiskPanel({ check, compact = false }) {
           </div>
           <div className="mt-2 text-xs text-slate-500">
             {details.claims_last_90_days ?? 0} claims / 90d · approved {Math.round((details.approved_ratio ?? 0) * 100)}%
-            {details.auto_refund_eligible === false ? " · admin refund" : " · auto-refund eligible"}
+            {riskScore >= AUTO_REFUND_RISK_MAX || details.auto_refund_eligible === false
+              ? " · hold refund"
+              : " · instant refund"}
           </div>
         </div>
       </div>
