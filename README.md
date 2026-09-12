@@ -1,5 +1,9 @@
 # ResolveX
 
+### [Open the live ResolveX application](https://resolvex-app.vercel.app)
+
+[![Live Demo](https://img.shields.io/badge/Live_Demo-Open_ResolveX-0f766e?style=for-the-badge)](https://resolvex-app.vercel.app)
+
 Real-time last-mile delivery problem detection and fair dispute resolution.
 Built for CodeArena'26, Topic 3 — "Managing last-mile delivery problems in real time."
 
