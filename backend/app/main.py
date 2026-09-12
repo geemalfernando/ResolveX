@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .config import get_settings
 from .ml.eta_model import eta_model
 from .ml.fault_model import fault_model
-from .routers import aggregator, cases, checks, orders, workflow, demo, ops_map, commerce
+from .routers import aggregator, assistant, cases, checks, orders, workflow, demo, ops_map, commerce
 
 settings = get_settings()
 
@@ -51,6 +51,7 @@ app.include_router(commerce.router)
 app.include_router(cases.router)
 app.include_router(checks.router)
 app.include_router(aggregator.router)
+app.include_router(assistant.router)
 app.include_router(orders.router)
 app.include_router(workflow.router)
 app.include_router(demo.router)
