@@ -17,7 +17,7 @@ router = APIRouter(prefix="/commerce", tags=["rider-signup"])
 class RiderJoinRequest(BaseModel):
     name: str = Field(min_length=2, max_length=100)
     email: str = Field(min_length=5, max_length=254)
-    password: str = Field(min_length=12, max_length=128)
+    password: str = Field(min_length=8, max_length=128)
     phone: str = Field(min_length=7, max_length=30)
     vehicle: Literal["bike", "scooter", "car"] = "bike"
     zone_id: Optional[str] = Field(default=None, max_length=100)

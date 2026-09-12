@@ -20,7 +20,7 @@ export default function Signup() {
 
   const passwordScore = useMemo(() => {
     let score = 0;
-    if (password.length >= 12) score += 1;
+    if (password.length >= 8) score += 1;
     if (/[A-Z]/.test(password) && /[a-z]/.test(password)) score += 1;
     if (/\d/.test(password) && /[^A-Za-z0-9]/.test(password)) score += 1;
     return score;
@@ -92,13 +92,13 @@ export default function Signup() {
             <div className="relative">
               <input
                 required
-                minLength={12}
+                minLength={8}
                 type={showPassword ? "text" : "password"}
                 className="field pr-20"
                 autoComplete="new-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="At least 12 characters"
+                placeholder="At least 8 characters"
               />
               <button
                 type="button"
@@ -117,7 +117,7 @@ export default function Signup() {
               ))}
             </div>
             <p className="mt-2 text-xs text-slate-500">
-              Use 12+ characters. A mix of upper/lowercase, numbers, and symbols is stronger.
+              Use 8+ characters. A mix of upper/lowercase, numbers, and symbols is stronger.
             </p>
           </div>
 

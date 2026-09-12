@@ -114,7 +114,7 @@ export default function RiderSignup() {
             </label>
             <label className="text-sm font-semibold text-slate-700 sm:col-span-2">
               Password
-              <input required minLength={12} type="password" className="field" autoComplete="new-password" value={form.password} onChange={(e) => update("password", e.target.value)} placeholder="At least 12 characters" />
+              <input required minLength={8} type="password" className="field" autoComplete="new-password" value={form.password} onChange={(e) => update("password", e.target.value)} placeholder="At least 8 characters" />
             </label>
             <label className="text-sm font-semibold text-slate-700 sm:col-span-2">
               Vehicle

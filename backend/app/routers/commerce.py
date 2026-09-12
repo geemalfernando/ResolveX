@@ -444,7 +444,7 @@ def riders(principal: AuthPrincipal = Depends(require_roles('partner', 'admin', 
 
 class RiderAccount(BaseModel):
     email: str = Field(min_length=5, max_length=254)
-    password: str = Field(min_length=12, max_length=128)
+    password: str = Field(min_length=8, max_length=128)
     name: str = Field(min_length=2, max_length=100)
     zone_id: str = Field(min_length=1, max_length=100)
     vehicle: Literal['bike', 'scooter', 'car'] = 'bike'

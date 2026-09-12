@@ -131,8 +131,9 @@ export default function Login() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
+                minLength={8}
                 autoComplete="current-password"
-                placeholder="Your password"
+                placeholder="At least 8 characters"
               />
               <button
                 type="button"
