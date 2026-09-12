@@ -8,9 +8,11 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, File, HTTPException, UploadFile, Depends
 from postgrest.exceptions import APIError
 
+from ..auth import AuthPrincipal, current_user, require_roles
+from .commerce import find_order, authorize_order
 from .. import checks
 from ..aggregator.aggregator import run_aggregator
 from ..case_builder import build_case
@@ -26,7 +28,7 @@ router = APIRouter(prefix="/cases", tags=["cases"])
 
 
 @router.post("/upload-photo")
-def upload_photo(file: UploadFile = File(...)) -> dict[str, str]:
+def upload_photo(file: UploadFile = File(...), principal: AuthPrincipal = Depends(require_roles("customer", "support", "admin"))) -> dict[str, str]:
     allowed_types = {"image/jpeg", "image/png", "image/webp"}
     if file.content_type not in allowed_types:
         raise HTTPException(status_code=400, detail="Only JPEG, PNG, and WebP images are supported")
@@ -52,6 +54,15 @@ def upload_photo(file: UploadFile = File(...)) -> dict[str, str]:
 
 
 @router.post("", response_model=CaseResponse)
+def submit_case(body: CreateCaseRequest, principal: AuthPrincipal = Depends(require_roles("customer", "support", "ops", "admin"))):
+    authorize_order(find_order(body.order_id), principal)
+    if principal.role == "customer":
+        if not body.complaint_type:
+            raise HTTPException(422, "Select a complaint type")
+        body.trigger = "customer_complaint"
+    return create_case(body)
+
+
 def create_case(body: CreateCaseRequest) -> CaseResponse:
     from .. import workflows as wf
     with wf.LOCK:
@@ -78,6 +89,12 @@ def create_case(body: CreateCaseRequest) -> CaseResponse:
 
 
 @router.get("/{case_id}", response_model=CaseResponse)
+def view_case(case_id: str, principal: AuthPrincipal = Depends(current_user)):
+    record = get_case(case_id)
+    authorize_order(find_order(record.case.order.id), principal)
+    return record
+
+
 def get_case(case_id: str) -> CaseResponse:
     from ..models import Case, CheckResult, Verdict
     sb = get_supabase()

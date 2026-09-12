@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 
 import ClaimRiskPanel, { pickClaimHistoryCheck } from "../components/ClaimRiskPanel.jsx";
-import { API_BASE_URL, supabase } from "../lib/supabaseClient";
+import { supabase } from "../lib/supabaseClient";
+
+import { api } from "../lib/api";
 
 function riskTone(score) {
   if (score >= 75) return "bg-rose-100 text-rose-800 border-rose-200";
@@ -93,9 +95,7 @@ export default function ClaimRiskBoard() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`${API_BASE_URL}/cases/${selectedId}`);
-        if (!res.ok) return;
-        const body = await res.json();
+        const body = await api(`/cases/${selectedId}`);
         if (!cancelled) setDetail(body);
       } catch {
         /* optional */
@@ -121,42 +121,10 @@ export default function ClaimRiskBoard() {
         ? "Admin approved refund from Claim Risk board."
         : "Admin denied claim from Claim Risk board.";
     try {
-      if (ticket) {
-        const { error } = await supabase
-          .from("support_tickets")
-          .update({
-            status: "resolved",
-            resolution_notes: notes,
-            resolved_at: new Date().toISOString(),
-            assigned_agent: "claim_risk_admin",
-          })
-          .eq("id", ticket.id);
-        if (error) throw error;
-      } else {
-        await supabase.from("support_tickets").insert({
-          case_id: selected.id,
-          status: "resolved",
-          resolution_notes: notes,
-          resolved_at: new Date().toISOString(),
-          assigned_agent: "claim_risk_admin",
-        });
-      }
-
-      await supabase.from("cases").update({ status: "resolved" }).eq("id", selected.id);
-
-      if (selected.customerId) {
-        await supabase.from("refund_history").insert({
-          customer_id: selected.customerId,
-          order_id: selected.orderId || null,
-          reason: ["late", "wrong_item", "damaged", "missing_item", "other"].includes(
-            selected.complaintType
-          )
-            ? selected.complaintType
-            : "other",
-          amount: 0,
-          outcome: decision === "approved" ? "approved" : "denied",
-        });
-      }
+      await api(`/cases/${selected.id}/support`, {
+        action: decision === "approved" ? "approve_refund" : "reject",
+        reason: notes,
+      });
 
       setMessage(
         decision === "approved"

@@ -5,12 +5,13 @@ import logging
 import threading
 import uuid
 from datetime import datetime, timedelta, timezone
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from typing import Literal
 
 from .. import workflows as wf
-from ..models import CreateCaseRequest, CaseTrigger, Case
+from ..auth import AuthPrincipal, require_roles
+from ..models import CreateCaseRequest, CaseTrigger
 from .cases import create_case
 
 router = APIRouter(prefix="/demo", tags=["demo"])
@@ -66,7 +67,6 @@ def advance():
                                   dict(order_id=order["id"], rider_id=order["rider_id"], lat=6.91, lng=79.79, recorded_at=stamp(55))]
                 sb.table("rider_gps_points").delete().eq("order_id", order["id"]).execute()
                 sb.table("rider_gps_points").insert(trail).execute()
-        # Detect after updating the whole zone, before any customer complaint.
         for order in STATE["orders"]:
             if order["late"] and not order["case_id"]:
                 response = create_case(CreateCaseRequest(order_id=order["id"], trigger=CaseTrigger.live_feed_late))
@@ -94,7 +94,7 @@ def start_worker():
 
 
 @router.get("/state")
-def state():
+def state(principal: AuthPrincipal = Depends(require_roles("ops", "admin"))):
     with wf.LOCK:
         return dict(STATE)
 
@@ -104,7 +104,7 @@ class Control(BaseModel):
 
 
 @router.post("/control")
-def control(body: Control):
+def control(body: Control, principal: AuthPrincipal = Depends(require_roles("ops", "admin"))):
     with wf.LOCK:
         if body.action == "pause":
             STATE["running"] = False

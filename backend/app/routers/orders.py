@@ -6,18 +6,23 @@ from __future__ import annotations
 
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 
 from ..db import get_supabase
+from ..auth import AuthPrincipal, current_user, require_roles
+from .commerce import authorize_order
 
 router = APIRouter(prefix="/orders", tags=["orders"])
 
 
 @router.get("")
-def list_orders(zone_id: Optional[str] = None, status: Optional[str] = None) -> list[dict]:
+def list_orders(zone_id: Optional[str] = None, status: Optional[str] = None, principal: AuthPrincipal = Depends(current_user)) -> list[dict]:
     sb = get_supabase()
     query = sb.table("orders").select("*")
+    if principal.role == "customer": query = query.eq("customer_id", principal.customer_id or "00000000-0000-0000-0000-000000000000")
+    elif principal.role == "partner": query = query.eq("merchant_id", principal.merchant_id)
+    elif principal.role == "rider": query = query.eq("rider_id", principal.rider_id)
     if zone_id:
         query = query.eq("zone_id", zone_id)
     if status:
@@ -26,11 +31,12 @@ def list_orders(zone_id: Optional[str] = None, status: Optional[str] = None) -> 
 
 
 @router.get("/{order_id}")
-def get_order(order_id: str) -> dict:
+def get_order(order_id: str, principal: AuthPrincipal = Depends(current_user)) -> dict:
     sb = get_supabase()
     row = sb.table("orders").select("*").eq("id", order_id).single().execute().data
     if not row:
         raise HTTPException(status_code=404, detail=f"Order {order_id} not found")
+    authorize_order(row, principal)
     return row
 
 
@@ -41,7 +47,7 @@ class OrderStatusUpdate(BaseModel):
 
 
 @router.patch("/{order_id}/status")
-def update_order_status(order_id: str, body: OrderStatusUpdate) -> dict:
+def update_order_status(order_id: str, body: OrderStatusUpdate, principal: AuthPrincipal = Depends(require_roles("ops", "admin"))) -> dict:
     """Used by scripts/replay_feed.py to advance an order through its lifecycle stages."""
     sb = get_supabase()
     update = {"status": body.status}
@@ -58,7 +64,7 @@ class FlagLateBody(BaseModel):
 
 
 @router.post("/{order_id}/flag-late")
-def flag_late(order_id: str, body: FlagLateBody) -> dict:
+def flag_late(order_id: str, body: FlagLateBody, principal: AuthPrincipal = Depends(require_roles("ops", "admin"))) -> dict:
     """Called by the mocked live order feed BEFORE any complaint arrives, so ops can see
     an order is trending late in real time."""
     sb = get_supabase()
@@ -75,7 +81,7 @@ def flag_late(order_id: str, body: FlagLateBody) -> dict:
 
 
 @router.get("/zones/{zone_id}/stats")
-def zone_stats(zone_id: str) -> dict:
+def zone_stats(zone_id: str, principal: AuthPrincipal = Depends(require_roles("ops", "support", "admin"))) -> dict:
     sb = get_supabase()
     rows = (
         sb.table("orders")
