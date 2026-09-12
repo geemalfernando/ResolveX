@@ -1,14 +1,15 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
-from .ml.fault_model import fault_model
-from .ml.eta_model import eta_model
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import get_settings
+from .ml.eta_model import eta_model
+from .ml.fault_model import fault_model
 from .routers import aggregator, cases, checks, orders, workflow, demo, ops_map, commerce
 
 settings = get_settings()
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -27,12 +28,23 @@ def model_status() -> dict:
     return {**fault_model.status(), **eta_model.status()}
 
 
+# Keep explicitly configured production origins, while always allowing local
+# Vite development from either hostname. This avoids localhost vs 127.0.0.1
+# mismatches and also works when Vite selects a different local port.
+configured_origins = [
+    origin.strip().rstrip("/")
+    for origin in settings.cors_origins.split(",")
+    if origin.strip()
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[origin.strip() for origin in settings.cors_origins.split(",")],
+    allow_origins=configured_origins,
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 app.include_router(commerce.router)
@@ -47,4 +59,7 @@ app.include_router(ops_map.router)
 
 @app.get("/health")
 def health() -> dict:
-    return {"status": "ok"}
+    return {
+        "status": "ok",
+        "cors_origins": configured_origins,
+    }
