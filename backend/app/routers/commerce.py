@@ -24,6 +24,10 @@ from .. import workflows as wf
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix='/commerce', tags=['commerce'])
+
+# How long a rider has to accept an offer before it is passed on.
+ASSIGNMENT_ACCEPT_TIMEOUT_MINUTES = 2
+
 MENU = [
     dict(id='rice', name='Chicken rice & curry', price=1250, category='Sri Lankan', emoji='🍛'),
     dict(id='kottu', name='Vegetable cheese kottu', price=1100, category='Sri Lankan', emoji='🥘'),
@@ -96,7 +100,84 @@ def _audit_reassignment(order_id, from_rider_id, to_rider_id, reason):
             )
         ).execute()
     except Exception:
-        pass
+        logger.warning('rider_reassignments unavailable; a declined order may be offered back to the same rider')
+
+
+def _declined_rider_ids(order_id):
+    """Riders who turned this delivery down. They are never offered it again."""
+    try:
+        rows = (
+            get_supabase()
+            .table('rider_reassignments')
+            .select('from_rider_id')
+            .eq('order_id', str(order_id))
+            .eq('reason', 'rider_rejected')
+            .execute()
+            .data
+            or []
+        )
+    except Exception:
+        return set()
+    return {str(row['from_rider_id']) for row in rows if row.get('from_rider_id')}
+
+
+def _offer_expired(order):
+    """True when an outstanding offer went unanswered long enough to re-offer."""
+    if order.get('rider_accepted_at') or not order.get('rider_id'):
+        return False
+    offered_at = order.get('rider_assigned_at') or order.get('ready_at')
+    if not offered_at:
+        return True
+    offered = TypeAdapter(datetime).validate_python(offered_at)
+    elapsed = (datetime.now(timezone.utc) - offered).total_seconds() / 60
+    return elapsed > ASSIGNMENT_ACCEPT_TIMEOUT_MINUTES
+
+
+def _offer_delivery(order, sb=None):
+    """Offer a packed order to the best rider who has not declined it.
+
+    Returns the rider id now holding the offer, or None when nobody is free.
+    """
+    sb = sb or get_supabase()
+    current = str(order['rider_id']) if order.get('rider_id') else None
+    declined = _declined_rider_ids(order['id'])
+    # Prefer somebody else, but let an unresponsive rider try again rather than
+    # stranding the order when they are the only one in the zone.
+    rider = _pick_nearby_rider(order, exclude_ids=declined | ({current} if current else set()))
+    if rider is None:
+        rider = _pick_nearby_rider(order, exclude_ids=declined)
+    if rider is None:
+        return None
+
+    update = dict(rider_id=rider['id'], rider_assigned_at=wf.now(), rider_accepted_at=None)
+    query = sb.table('orders').update(update).eq('id', order['id']).eq('status', 'ready')
+    query = query.eq('rider_id', current) if current else query.is_('rider_id', 'null')
+    if not (query.execute().data or []):
+        return current
+    if rider['id'] != current:
+        _audit_reassignment(order['id'], current, rider['id'], 'offer_expired' if current else 'auto_assigned')
+    return str(rider['id'])
+
+
+def _reoffer_stale_deliveries(zone_id=None, merchant_id=None):
+    """Re-offer packed orders that nobody has accepted, so none is stranded."""
+    sb = get_supabase()
+    query = sb.table('orders').select('*').eq('status', 'ready')
+    if zone_id:
+        query = query.eq('zone_id', zone_id)
+    if merchant_id:
+        query = query.eq('merchant_id', merchant_id)
+    try:
+        packed = query.execute().data or []
+    except Exception:
+        return
+    for order in packed:
+        if order.get('rider_id') and not _offer_expired(order):
+            continue
+        try:
+            _offer_delivery(order, sb)
+        except Exception:
+            logger.warning('Could not re-offer order %s', order.get('id'))
 
 
 @router.get('/catalog')
@@ -272,6 +353,15 @@ def my_orders(principal: AuthPrincipal = Depends(current_user)):
     if any(v is None for v in filters.values()):
         raise HTTPException(403, 'Account is not linked')
 
+    # Riders and restaurants poll this list, which is where an unanswered offer
+    # gets passed on so a packed order never waits on a rider who went offline.
+    if principal.role == 'rider':
+        rider = get_supabase().table('riders').select('zone_id').eq('id', principal.rider_id).execute().data
+        if rider:
+            _reoffer_stale_deliveries(zone_id=rider[0]['zone_id'])
+    elif principal.role == 'partner':
+        _reoffer_stale_deliveries(merchant_id=principal.merchant_id)
+
     rows = wf.rows('orders', **filters)
     for order in rows:
         if order['status'] in wf.OPEN:
@@ -293,7 +383,7 @@ def my_orders(principal: AuthPrincipal = Depends(current_user)):
 
 
 class Stage(BaseModel):
-    action: Literal['accept', 'reject', 'pack', 'handover', 'deliver', 'decline_delivery']
+    action: Literal['accept', 'reject', 'pack', 'handover', 'deliver', 'accept_delivery', 'decline_delivery']
     rider_id: Optional[UUID] = None
     lat: Optional[float] = Field(default=None, ge=-90, le=90)
     lng: Optional[float] = Field(default=None, ge=-180, le=180)
@@ -302,7 +392,7 @@ class Stage(BaseModel):
 @router.post('/orders/{order_id}/stage')
 def stage(order_id: UUID, body: Stage, principal: AuthPrincipal = Depends(require_roles('partner', 'rider', 'admin'))):
     merchant_actions = {'accept', 'reject', 'pack', 'handover'}
-    rider_actions = {'deliver', 'decline_delivery'}
+    rider_actions = {'deliver', 'accept_delivery', 'decline_delivery'}
     if body.action in merchant_actions and principal.role not in ('partner', 'admin'):
         raise HTTPException(403, 'Only the restaurant can update preparation and handover')
     if body.action in rider_actions and principal.role not in ('rider', 'admin'):
@@ -312,13 +402,40 @@ def stage(order_id: UUID, body: Stage, principal: AuthPrincipal = Depends(requir
         order = find_order(order_id)
         authorize_order(order, principal)
 
+        if body.action == 'accept_delivery':
+            if order['status'] != 'ready':
+                raise HTTPException(409, f"Order is {order['status']}; only a packed order can be accepted")
+            if not order.get('rider_id'):
+                raise HTTPException(409, 'This order is not assigned to a rider yet')
+            if order.get('rider_accepted_at'):
+                return order
+            result = (
+                get_supabase()
+                .table('orders')
+                .update({'rider_accepted_at': wf.now()})
+                .eq('id', str(order_id))
+                .eq('status', 'ready')
+                .eq('rider_id', order['rider_id'])
+                .execute()
+                .data
+            )
+            if not result:
+                raise HTTPException(409, 'This assignment moved to another rider; refresh and try again')
+            return result[0]
+
         if body.action == 'decline_delivery':
             if order['status'] != 'ready':
                 raise HTTPException(409, 'Only packed orders can be declined by a rider')
-            previous = order.get('rider_id')
-            replacement = _pick_nearby_rider(order, exclude_ids={previous} if previous else set())
+            previous = str(order['rider_id']) if order.get('rider_id') else None
+            declined = _declined_rider_ids(order_id) | ({previous} if previous else set())
+            replacement = _pick_nearby_rider(order, exclude_ids=declined)
             next_rider = replacement['id'] if replacement else None
-            result = get_supabase().table('orders').update({'rider_id': next_rider}).eq('id', str(order_id)).eq('status', 'ready').execute().data
+            update = {
+                'rider_id': next_rider,
+                'rider_accepted_at': None,
+                'rider_assigned_at': wf.now() if next_rider else None,
+            }
+            result = get_supabase().table('orders').update(update).eq('id', str(order_id)).eq('status', 'ready').execute().data
             if not result:
                 raise HTTPException(409, 'Order changed; refresh and try again')
             _audit_reassignment(str(order_id), previous, next_rider, 'rider_rejected')
@@ -345,17 +462,17 @@ def stage(order_id: UUID, body: Stage, principal: AuthPrincipal = Depends(requir
         if body.action == 'pack':
             if not has_evidence(str(order_id), 'packing'):
                 raise HTTPException(422, 'Upload a packing photo before marking the order packed.')
-            rider = _pick_nearby_rider(order)
+            rider = _pick_nearby_rider(order, exclude_ids=_declined_rider_ids(order_id))
             update['rider_id'] = rider['id'] if rider else None
+            update['rider_assigned_at'] = wf.now() if rider else None
+            update['rider_accepted_at'] = None
 
         if body.action == 'handover':
             assigned_rider_id = order.get('rider_id')
             if not assigned_rider_id:
-                rider = _pick_nearby_rider(order)
-                if not rider:
-                    raise HTTPException(409, 'No rider is available in this zone yet')
-                assigned_rider_id = rider['id']
-                update['rider_id'] = assigned_rider_id
+                raise HTTPException(409, 'No rider is available in this zone yet')
+            if not order.get('rider_accepted_at'):
+                raise HTTPException(409, 'Waiting for the rider to accept this assignment')
             merchant = get_supabase().table('merchants').select('lat,lng').eq('id', order['merchant_id']).single().execute().data
             gps({**order, 'rider_id': assigned_rider_id}, merchant['lat'], merchant['lng'], 0)
 

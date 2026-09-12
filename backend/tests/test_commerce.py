@@ -7,12 +7,13 @@ from backend.app.routers import commerce as c
 from backend.app.auth import AuthPrincipal
 
 class DB:
- def __init__(self):self.tables={t:[] for t in ['orders','merchants','riders','rider_gps_points']}
+ def __init__(self):self.tables={t:[] for t in ['orders','merchants','riders','rider_gps_points','rider_reassignments']}
  def table(self,t):return Query(self,t)
 class Query:
  def __init__(self,db,t):self.db=db;self.t=t;self.filters=[];self.action='select';self.body=None;self.one=False
  def select(self,*a,**kw):return self
  def eq(self,k,v):self.filters.append((k,v));return self
+ def is_(self,k,v):self.filters.append((k,None if str(v).lower()=='null' else v));return self
  def insert(self,b):self.action='insert';self.body=b;return self
  def update(self,b):self.action='update';self.body=b;return self
  def single(self):self.one=True;return self
@@ -62,8 +63,10 @@ class CommerceTests(unittest.TestCase):
   self.assertEqual(error.exception.status_code,403)
  def test_complete_fulfillment_and_gps(self):
   order,_=self.checkout();oid=order['id']
-  for action in ['accept','pack','handover']:
-   c.stage(oid,c.Stage(action=action,rider_id=self.rid if action=='handover' else None),self.partner)
+  c.stage(oid,c.Stage(action='accept'),self.partner)
+  c.stage(oid,c.Stage(action='pack'),self.partner)
+  c.stage(oid,c.Stage(action='accept_delivery'),self.rider)
+  c.stage(oid,c.Stage(action='handover'),self.partner)
   c.position(oid,c.Position(lat=6.905,lng=79.805),self.rider)
   final=c.stage(oid,c.Stage(action='deliver',lat=6.91,lng=79.81),self.rider)
   self.assertEqual(final['status'],'dropped_off')
@@ -82,6 +85,49 @@ class CommerceTests(unittest.TestCase):
    with self.assertRaises(HTTPException) as error:c.stage(order['id'],c.Stage(action='pack'),self.partner)
   self.assertEqual(error.exception.status_code,422)
   self.assertIn('packing photo', error.exception.detail.lower())
+ def packed(self):
+  order,_=self.checkout();oid=order['id']
+  c.stage(oid,c.Stage(action='accept'),self.partner)
+  return c.stage(oid,c.Stage(action='pack'),self.partner)
+ def test_pack_offers_the_delivery_to_a_rider(self):
+  packed=self.packed()
+  self.assertEqual(packed['rider_id'],self.rid)
+  self.assertTrue(packed['rider_assigned_at'])
+  self.assertIsNone(packed['rider_accepted_at'])
+ def test_handover_waits_for_the_rider_to_accept(self):
+  packed=self.packed()
+  with self.assertRaises(HTTPException) as error:c.stage(packed['id'],c.Stage(action='handover'),self.partner)
+  self.assertEqual(error.exception.status_code,409)
+  self.assertIn('accept',error.exception.detail.lower())
+  accepted=c.stage(packed['id'],c.Stage(action='accept_delivery'),self.rider)
+  self.assertTrue(accepted['rider_accepted_at'])
+  self.assertEqual(c.stage(packed['id'],c.Stage(action='handover'),self.partner)['status'],'picked_up')
+ def test_decline_reassigns_and_never_returns_to_a_rider_who_declined(self):
+  second=str(uuid4());self.db.tables['riders'].append(dict(id=second,name='Tharindu',zone_id='ZONE_A'))
+  packed=self.packed();oid=packed['id']
+  first=packed['rider_id']
+  passed_on=c.stage(oid,c.Stage(action='decline_delivery'),AuthPrincipal('r1',None,'rider',rider_id=first))
+  self.assertEqual(passed_on['rider_id'],second)
+  self.assertFalse(passed_on.get('assignment_pending'))
+  self.assertIsNone(passed_on['rider_accepted_at'])
+  stranded=c.stage(oid,c.Stage(action='decline_delivery'),AuthPrincipal('r2',None,'rider',rider_id=second))
+  self.assertIsNone(stranded['rider_id'])
+  self.assertTrue(stranded['assignment_pending'])
+  self.assertEqual(c._declined_rider_ids(oid),{first,second})
+ def test_unanswered_offer_is_passed_to_another_rider(self):
+  second=str(uuid4());self.db.tables['riders'].append(dict(id=second,name='Tharindu',zone_id='ZONE_A'))
+  packed=self.packed();oid=packed['id']
+  stored=self.db.tables['orders'][0]
+  stored['rider_assigned_at']='2026-01-01T00:00:00+00:00'
+  c._reoffer_stale_deliveries(zone_id='ZONE_A')
+  self.assertEqual(stored['rider_id'],second)
+  self.assertIsNone(stored['rider_accepted_at'])
+ def test_a_lone_rider_keeps_the_offer_rather_than_losing_the_order(self):
+  packed=self.packed();oid=packed['id']
+  stored=self.db.tables['orders'][0]
+  stored['rider_assigned_at']='2026-01-01T00:00:00+00:00'
+  c._reoffer_stale_deliveries(zone_id='ZONE_A')
+  self.assertEqual(stored['rider_id'],self.rid)
  def test_declined_demo_card_does_not_place_order(self):
   body=c.Checkout(request_id=uuid4(),merchant_id=self.mid,items=[dict(product_id='rice',qty=1)],address='12 Colombo Lane',phone='0771234567',lat=6.91,lng=79.81,payment=dict(holder='Demo Customer',number='4000000000000002',expiry='12/28',cvc='123'))
   with self.assertRaises(HTTPException) as error:c.checkout(body,self.customer)

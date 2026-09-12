@@ -21,7 +21,7 @@ const STEPS = [
 
 const COPY = {
   merchant: { kicker: "Kitchen", title: "Restaurant orders", subtitle: "Prepare orders. A nearby rider is assigned automatically when food is packed." },
-  rider: { kicker: "Rider", title: "My deliveries", subtitle: "Share location, navigate to the customer, deliver, or decline a packed assignment." },
+  rider: { kicker: "Rider", title: "My deliveries", subtitle: "Accept or reject a new assignment, then navigate to the customer and confirm delivery." },
   customer: { kicker: "Customer", title: "My orders", subtitle: "Track a live order or report a problem." },
 };
 
@@ -194,10 +194,13 @@ export default function OrderDashboard({ mode = "customer" }) {
 
       const result = await api(`/commerce/orders/${order.id}/stage`, { action, ...location });
       if (action === "pack") {
-        setNotice(result.rider_id ? "Packed. The nearest available rider was assigned automatically." : "Packed. Waiting for an available rider in this zone.");
+        setNotice(result.rider_id ? "Packed and offered to the nearest available rider." : "Packed. Waiting for an available rider in this zone.");
+      }
+      if (action === "accept_delivery") {
+        setNotice("Assignment accepted. Collect the order from the restaurant.");
       }
       if (action === "decline_delivery") {
-        setNotice(result.assignment_pending ? "Assignment declined. No replacement rider is available yet." : "Assignment declined and sent to another nearby rider.");
+        setNotice(result.assignment_pending ? "Assignment declined. No other rider is free yet, so it will be offered again automatically." : "Assignment declined and offered to another nearby rider.");
       }
       await load();
       if (mode === "merchant") api("/commerce/riders").then(setRiders).catch(() => {});
@@ -356,17 +359,37 @@ export default function OrderDashboard({ mode = "customer" }) {
                       )}
                       <div className="rounded-2xl border border-slate-200 p-4">
                       <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Assigned rider</p>
-                      <p className="mt-1 font-semibold">{assignedRider?.name || (selected.rider_id ? "Assigned rider" : "Waiting for rider")}</p>
+                      <p className="mt-1 font-semibold">{assignedRider?.name || (selected.rider_id ? "Assigned rider" : "Looking for a rider")}</p>
                       {assignedRider && <p className="text-sm capitalize text-slate-500">{assignedRider.vehicle} · {assignedRider.zone_id}</p>}
-                      <button className="btn mt-3" disabled={busy || !selected.rider_id} onClick={() => act(selected, "handover")}>Hand over order</button>
+                      <p className="mt-2 text-sm text-slate-500">
+                        {!selected.rider_id
+                          ? "No rider is free in this zone yet. The order is offered again automatically."
+                          : selected.rider_accepted_at
+                            ? `Accepted at ${new Date(selected.rider_accepted_at).toLocaleTimeString()}. Hand the order over when they arrive.`
+                            : "Offered. Waiting for the rider to accept, then it passes to the next rider automatically."}
+                      </p>
+                      <button className="btn mt-3" disabled={busy || !selected.rider_accepted_at} onClick={() => act(selected, "handover")}>Hand over order</button>
                     </div>
                     </div>
                   )}
 
                   {mode === "rider" && selected.status === "ready" && (
-                    <div className="flex flex-wrap gap-2">
-                      <button className="btn-danger" disabled={busy} onClick={() => act(selected, "decline_delivery")}>Reject assignment</button>
-                      <span className="self-center text-sm text-slate-500">The system will send it to another nearby rider.</span>
+                    <div className="space-y-3">
+                      {selected.rider_accepted_at ? (
+                        <p className="rounded-2xl bg-emerald-50 p-3 text-sm text-emerald-800">
+                          Accepted at {new Date(selected.rider_accepted_at).toLocaleTimeString()}. Collect the order — the restaurant confirms the handover.
+                        </p>
+                      ) : (
+                        <p className="rounded-2xl bg-amber-50 p-3 text-sm text-amber-800">
+                          New assignment. Accept it to collect this order, or reject it to pass it to another nearby rider.
+                        </p>
+                      )}
+                      <div className="flex flex-wrap gap-2">
+                        {!selected.rider_accepted_at && (
+                          <button className="btn" disabled={busy} onClick={() => act(selected, "accept_delivery")}>Accept assignment</button>
+                        )}
+                        <button className="btn-danger" disabled={busy} onClick={() => act(selected, "decline_delivery")}>Reject assignment</button>
+                      </div>
                     </div>
                   )}
 
