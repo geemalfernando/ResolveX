@@ -11,6 +11,7 @@ import Admin from "./pages/Admin.jsx";
 import ClaimRiskBoard from "./pages/ClaimRiskBoard.jsx";
 import Login from "./pages/Login.jsx";
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
+import XAssistant from "./components/XAssistant.jsx";
 import { useAuth } from "./auth/AuthContext.jsx";
 
 const navLinkClass = ({ isActive }) =>
@@ -85,6 +86,8 @@ export default function App() {
           <Route path="/admin" element={<ProtectedRoute allowedRoles={["admin"]}><Admin /></ProtectedRoute>} />
         </Routes>
       </main>
+
+      <XAssistant />
     </div>
   );
 }
