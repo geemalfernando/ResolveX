@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { actionLabel, api, resolution, uploadApi } from "../lib/api";
+import { preparePhoto } from "../lib/photo";
 import CasePanel from "../components/CasePanel";
 import OutcomeBadge from "../components/OutcomeBadge.jsx";
 
@@ -156,7 +157,7 @@ export default function CustomerApp() {
   async function upload() {
     if (!file) return null;
     const form = new FormData();
-    form.append("file", file);
+    form.append("file", await preparePhoto(file));
     form.append("kind", "claim");
     const saved = await uploadApi(`/commerce/orders/${orderId}/evidence`, form);
     return saved.path || saved.photo_url;

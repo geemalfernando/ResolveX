@@ -52,6 +52,14 @@ class Settings(BaseSettings):
 
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 
+    # Preview deployments get a fresh hostname per build, so they are matched by
+    # pattern instead of being listed in cors_origins. Localhost is always allowed.
+    cors_origin_regex: str = ""
+
+    # The ops demo feed polls on a background thread, which only works on a
+    # long-lived server. Serverless instances are frozen between requests.
+    enable_demo_worker: bool = True
+
 
 @lru_cache
 def get_settings() -> Settings:

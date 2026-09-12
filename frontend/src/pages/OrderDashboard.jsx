@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, uploadApi } from "../lib/api";
+import { preparePhoto } from "../lib/photo";
 
 const STATUS = {
   placed: { label: "Needs approval", tone: "bg-amber-50 text-amber-900 ring-amber-200" },
@@ -162,7 +163,7 @@ export default function OrderDashboard({ mode = "customer" }) {
   async function uploadEvidence(order, kind, file) {
     setError("");
     const form = new FormData();
-    form.append("file", file);
+    form.append("file", await preparePhoto(file));
     form.append("kind", kind);
     try {
       const saved = await uploadApi(`/commerce/orders/${order.id}/evidence`, form);
