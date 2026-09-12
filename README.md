@@ -48,10 +48,10 @@ support agent.
                                        |
         +------------------+----------+-----------------+
         |                  |                             |
-   OPS DASHBOARD      PARTNER PORTAL                SUPPORT QUEUE
-   live Leaflet map   merchant sees & responds      agent mediates disputed
-   of open/late/       to complaints on their        SUPPORT_TICKET cases
-   disputed orders     own orders
+   OPS DASHBOARD      PARTNER PORTAL                CLAIM RISK
+   live Leaflet map   merchant sees & responds      admin/support review
+   of open/late/       to complaints on their        high-risk cases
+   disputed orders     own orders                    (auto-refund if < 40%)
 ```
 
 All AI calls (PHOTO check, Fairness Aggregator) happen **only** in the FastAPI backend —

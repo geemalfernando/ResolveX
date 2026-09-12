@@ -4,7 +4,7 @@ ResolveX uses **Supabase Auth** for login and the `public.user_profiles` table f
 
 ## Access matrix
 
-| Role | Customer | Ops Dashboard | Partner Portal | Support Queue | Admin |
+| Role | Customer | Ops Dashboard | Partner Portal | Claim Risk | Admin |
 |---|---:|---:|---:|---:|---:|
 | `customer` | Yes | No | No | No | No |
 | `ops` | No | Yes | No | No | No |
@@ -148,9 +148,9 @@ Backend and the demo-user seeder require a server key (`SUPABASE_SECRET_KEY` or 
 
 1. Open `/ops` while signed out -> redirected to `/login`.
 2. Sign in as customer and enter `/ops` -> redirected to `/`.
-3. Sign in as ops -> `/ops` works; `/partner` and `/support` are inaccessible.
+3. Sign in as ops -> `/ops` works; `/partner` and `/claims` are inaccessible.
 4. Sign in as partner -> only that merchant's cases appear.
-5. Sign in as support -> Support Queue works but Ops demo controls and Partner Portal are inaccessible.
+5. Sign in as support -> Claim Risk works but Ops demo controls and Partner Portal are inaccessible.
 6. Sign in as admin -> all sections are available.
 
 Backend authorization can also be checked by calling a protected endpoint with no `Authorization` header (expect `401`) and then with a valid access token for the wrong role (expect `403`).

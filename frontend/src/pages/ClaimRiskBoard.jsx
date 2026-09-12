@@ -1,21 +1,23 @@
 import { useEffect, useMemo, useState } from "react";
 
-import ClaimRiskPanel, { pickClaimHistoryCheck } from "../components/ClaimRiskPanel.jsx";
+import ClaimRiskPanel, { AUTO_REFUND_RISK_MAX, pickClaimHistoryCheck } from "../components/ClaimRiskPanel.jsx";
+import OutcomeBadge, { outcomeLabel } from "../components/OutcomeBadge.jsx";
 import { supabase } from "../lib/supabaseClient";
-
-import { api } from "../lib/api";
+import { api, actionLabel, faultLabel } from "../lib/api";
 
 function riskTone(score) {
-  if (score >= 75) return "bg-rose-100 text-rose-800 border-rose-200";
-  if (score >= 45) return "bg-amber-100 text-amber-900 border-amber-200";
-  if (score >= 20) return "bg-sky-100 text-sky-800 border-sky-200";
-  return "bg-emerald-100 text-emerald-800 border-emerald-200";
+  if (score >= 75) return "bg-rose-50 text-rose-800 ring-rose-200";
+  if (score >= AUTO_REFUND_RISK_MAX * 100) return "bg-amber-50 text-amber-900 ring-amber-200";
+  return "bg-emerald-50 text-emerald-800 ring-emerald-200";
 }
 
-/**
- * Admin claim-risk board: only place that shows CLAIM HISTORY · AI risk %,
- * plus Approve / Deny refund for the selected case.
- */
+const FILTERS = [
+  { id: "review", label: "Needs review" },
+  { id: "auto", label: "Auto refund" },
+  { id: "resolved", label: "Resolved" },
+  { id: "all", label: "All" },
+];
+
 export default function ClaimRiskBoard() {
   const [rows, setRows] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
@@ -24,6 +26,7 @@ export default function ClaimRiskBoard() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(null);
+  const [filter, setFilter] = useState("review");
 
   async function loadBoard() {
     setLoading(true);
@@ -31,7 +34,7 @@ export default function ClaimRiskBoard() {
       .from("cases")
       .select("id, order_id, trigger, status, created_at, case_payload")
       .order("created_at", { ascending: false })
-      .limit(40);
+      .limit(80);
     if (!cases?.length) {
       setRows([]);
       setTicketsByCase({});
@@ -60,27 +63,28 @@ export default function ClaimRiskBoard() {
         const details = check?.result?.details ?? {};
         const risk = Number(details.risk_score ?? details.risk_probability ?? 0);
         const payload = c.case_payload || {};
+        const verdict = verdictByCase[c.id];
+        const needsReview = Boolean(check?.flagged) || risk >= AUTO_REFUND_RISK_MAX || verdict?.outcome === "SUPPORT_TICKET";
         return {
           id: c.id,
           orderId: c.order_id,
           status: c.status,
           customer: payload.customer?.name ?? "Customer",
-          customerId: payload.customer?.id,
           complaintType: payload.complaint?.type ?? "other",
-          bandHint: payload.complaint?.description?.match(/^\[(\w+)\]/)?.[1] ?? null,
           claims90: details.claims_last_90_days ?? 0,
           flags: details.risk_flags ?? [],
           risk,
           flagged: Boolean(check?.flagged),
-          verdict: verdictByCase[c.id],
+          verdict,
           check,
+          needsReview,
         };
       })
       .sort((a, b) => b.risk - a.risk);
 
     setRows(mapped);
     setLoading(false);
-    setSelectedId((prev) => prev ?? mapped[0]?.id ?? null);
+    setSelectedId((prev) => (prev && mapped.some((r) => r.id === prev) ? prev : mapped[0]?.id ?? null));
   }
 
   useEffect(() => {
@@ -88,10 +92,8 @@ export default function ClaimRiskBoard() {
   }, []);
 
   useEffect(() => {
-    if (!selectedId) {
-      setDetail(null);
-      return;
-    }
+    setDetail(null);
+    if (!selectedId) return;
     let cancelled = false;
     (async () => {
       try {
@@ -106,11 +108,39 @@ export default function ClaimRiskBoard() {
     };
   }, [selectedId]);
 
-  const selected = useMemo(() => rows.find((r) => r.id === selectedId), [rows, selectedId]);
-  const claimCheck = pickClaimHistoryCheck(detail?.check_results) || selected?.check;
+  const filtered = useMemo(() => {
+    return rows.filter((r) => {
+      const resolved = r.status === "resolved";
+      if (filter === "review") return r.needsReview && !resolved;
+      if (filter === "auto") return !r.needsReview;
+      if (filter === "resolved") return resolved;
+      return true;
+    });
+  }, [rows, filter]);
+
+  useEffect(() => {
+    if (!filtered.length) return;
+    if (!filtered.some((r) => r.id === selectedId)) {
+      setSelectedId(filtered[0].id);
+    }
+  }, [filtered, selectedId]);
+
+  const selected = useMemo(
+    () => filtered.find((r) => r.id === selectedId) || rows.find((r) => r.id === selectedId),
+    [filtered, rows, selectedId]
+  );
+  const liveDetail = detail?.case_id === selectedId ? detail : null;
+  const claimCheck = pickClaimHistoryCheck(liveDetail?.check_results) || selected?.check;
   const ticket = selectedId ? ticketsByCase[selectedId] : null;
-  const resolved =
-    selected?.status === "resolved" || ticket?.status === "resolved";
+  const resolved = selected?.status === "resolved" || ticket?.status === "resolved";
+  const outcome = liveDetail?.verdict?.outcome ?? selected?.verdict?.outcome;
+  const refund = liveDetail?.case?.workflow?.refund;
+  const counts = {
+    review: rows.filter((r) => r.needsReview && r.status !== "resolved").length,
+    auto: rows.filter((r) => !r.needsReview).length,
+    resolved: rows.filter((r) => r.status === "resolved").length,
+    all: rows.length,
+  };
 
   async function decideRefund(decision) {
     if (!selected) return;
@@ -125,12 +155,7 @@ export default function ClaimRiskBoard() {
         action: decision === "approved" ? "approve_refund" : "reject",
         reason: notes,
       });
-
-      setMessage(
-        decision === "approved"
-          ? `Refund approved for ${selected.customer}`
-          : `Claim denied for ${selected.customer}`
-      );
+      setMessage(decision === "approved" ? `Refund approved for ${selected.customer}` : `Claim denied for ${selected.customer}`);
       await loadBoard();
     } catch (err) {
       setMessage(err.message || "Could not save decision");
@@ -140,112 +165,144 @@ export default function ClaimRiskBoard() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-6">
-      <div className="mb-4">
-        <h1 className="text-xl font-bold">Claim history · AI</h1>
-        <p className="text-sm text-slate-500">
-          Risk scores live here only. Select a case to review, then approve or deny the refund.
-        </p>
+    <div className="mx-auto flex h-[calc(100vh-3.6rem)] max-w-7xl flex-col px-4 py-4 sm:px-6">
+      <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-teal-700">Claim history · AI</p>
+          <h1 className="text-2xl font-bold tracking-tight">Review queue</h1>
+          <p className="mt-1 text-sm text-slate-500">
+            Under {Math.round(AUTO_REFUND_RISK_MAX * 100)}% refunds automatically. {Math.round(AUTO_REFUND_RISK_MAX * 100)}%+ wait here for a manual decision.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-1 rounded-full bg-slate-100 p-1">
+          {FILTERS.map((f) => (
+            <button
+              key={f.id}
+              type="button"
+              onClick={() => setFilter(f.id)}
+              className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
+                filter === f.id ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"
+              }`}
+            >
+              {f.label} {counts[f.id] ?? 0}
+            </button>
+          ))}
+        </div>
       </div>
 
       {message && (
-        <div className="mb-3 rounded-md border bg-white px-3 py-2 text-sm text-slate-700">{message}</div>
+        <div className="mb-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">{message}</div>
       )}
 
       {loading && <p className="text-sm text-slate-400">Loading claim cases…</p>}
       {!loading && rows.length === 0 && (
-        <div className="rounded-lg border border-dashed bg-white p-6 text-sm text-slate-500">
-          No claim cases yet. From the ResolveX folder run:
-          <pre className="mt-2 rounded bg-slate-100 p-3 text-xs overflow-x-auto">
-            {`python scripts/seed_data.py --reset
-python scripts/seed_claim_cases.py`}
-          </pre>
-        </div>
+        <div className="panel p-6 text-sm text-slate-500">No claim cases yet. Seed demo data, then refresh.</div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
-        <div className="lg:col-span-3 space-y-2">
-          {rows.map((r) => (
+      <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-12">
+        <div className="min-h-0 space-y-2 overflow-y-auto pr-1 lg:col-span-5">
+          {filtered.map((r) => (
             <button
               key={r.id}
               type="button"
               onClick={() => setSelectedId(r.id)}
-              className={`w-full text-left rounded-lg border bg-white px-4 py-3 hover:border-slate-400 ${
-                selectedId === r.id ? "border-slate-900 ring-1 ring-slate-900" : ""
+              className={`w-full rounded-2xl border bg-white p-4 text-left shadow-sm transition ${
+                selectedId === r.id ? "border-slate-900 ring-2 ring-slate-900/10" : "border-slate-200 hover:border-slate-300"
               }`}
             >
               <div className="flex items-start justify-between gap-3">
-                <div>
-                  <div className="font-medium text-sm">{r.customer}</div>
-                  <div className="text-xs text-slate-500 mt-0.5">
-                    {r.bandHint ? `${r.bandHint} · ` : ""}
-                    {r.claims90} claims / 90d
-                    {r.flags.length ? ` · ${r.flags.join(", ")}` : ""}
+                <div className="min-w-0">
+                  <div className="truncate font-semibold">{r.customer}</div>
+                  <div className="mt-1 text-xs text-slate-500">
+                    {r.complaintType.replaceAll("_", " ")} · {r.claims90} claims / 90d
                   </div>
-                  <div className="text-xs text-slate-500 mt-1">
-                    {r.verdict?.outcome ?? "—"} · fault {r.verdict?.fault_party ?? "—"}
-                    {r.status === "resolved" ? " · resolved" : ""}
+                  <div className="mt-2">
+                    <OutcomeBadge outcome={r.verdict?.outcome} />
                   </div>
                 </div>
-                <span
-                  className={`shrink-0 rounded-full border px-2.5 py-1 text-sm font-semibold tabular-nums ${riskTone(
-                    Math.round(r.risk * 100)
-                  )}`}
-                >
+                <span className={`shrink-0 rounded-full px-2.5 py-1 text-sm font-bold tabular-nums ring-1 ${riskTone(Math.round(r.risk * 100))}`}>
                   {Math.round(r.risk * 100)}%
                 </span>
               </div>
             </button>
           ))}
+          {!loading && filtered.length === 0 && (
+            <p className="p-6 text-center text-sm text-slate-500">Nothing in this filter.</p>
+          )}
         </div>
 
-        <div className="lg:col-span-2 space-y-3">
-          <ClaimRiskPanel check={claimCheck} />
-          {detail?.verdict?.reasons?.length > 0 && (
-            <div className="rounded-md border bg-white px-3 py-3">
-              <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">
-                Verdict reasons
-              </div>
-              <ul className="space-y-1.5 text-xs text-slate-600">
-                {detail.verdict.reasons.map((r, i) => (
-                  <li key={`${r.check}-${i}`}>
-                    <span className="font-medium">{r.check}:</span> {r.reason}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {selected && (
-            <div className="rounded-md border bg-white px-3 py-3 space-y-2">
-              <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Admin decision
-              </div>
-              {resolved ? (
-                <p className="text-sm text-slate-600">
-                  {ticket?.resolution_notes || "This case is already resolved."}
-                </p>
-              ) : (
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => decideRefund("approved")}
-                    className="rounded-md bg-emerald-600 text-white text-sm px-3 py-1.5 disabled:opacity-50"
-                  >
-                    {busy ? "Saving…" : "Approve refund"}
-                  </button>
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => decideRefund("denied")}
-                    className="rounded-md bg-slate-200 text-slate-800 text-sm px-3 py-1.5 disabled:opacity-50"
-                  >
-                    Deny claim
-                  </button>
+        <div className="min-h-0 overflow-y-auto lg:col-span-7">
+          {selected ? (
+            <div className="space-y-3">
+              <section className="panel overflow-hidden">
+                <div className="bg-slate-900 px-5 py-4 text-white">
+                  <p className="text-xs uppercase tracking-[0.16em] text-teal-200">Decision</p>
+                  <div className="mt-2 flex flex-wrap items-end justify-between gap-3">
+                    <h2 className="text-2xl font-bold">{outcomeLabel(outcome)}</h2>
+                    <span className={`rounded-full px-3 py-1 text-lg font-bold tabular-nums ring-1 ${riskTone(Math.round(selected.risk * 100))}`}>
+                      {Math.round(selected.risk * 100)}% risk
+                    </span>
+                  </div>
+                  <p className="mt-2 text-sm text-slate-300">{actionLabel(outcome)}</p>
                 </div>
+                <div className="grid gap-3 p-5 sm:grid-cols-3">
+                  <div>
+                    <p className="text-[11px] uppercase tracking-wide text-slate-500">Customer</p>
+                    <p className="font-semibold">{selected.customer}</p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] uppercase tracking-wide text-slate-500">Fault</p>
+                    <p className="font-semibold">{faultLabel((liveDetail?.verdict?.fault_party || selected.verdict?.fault_party || "").toUpperCase())}</p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] uppercase tracking-wide text-slate-500">Refund</p>
+                    <p className="font-semibold">
+                      {refund ? `LKR ${Number(refund.amount).toLocaleString()} · ${refund.status}` : "Not issued"}
+                    </p>
+                  </div>
+                </div>
+                <div className="border-t px-5 py-4">
+                  {resolved ? (
+                    <p className="text-sm text-slate-600">
+                      {ticket?.resolution_notes ||
+                        (outcome === "AUTO_REFUND"
+                          ? "Refund already issued automatically."
+                          : "This case is already resolved.")}
+                    </p>
+                  ) : selected.needsReview ? (
+                    <div className="flex flex-wrap gap-2">
+                      <button type="button" disabled={busy} onClick={() => decideRefund("approved")} className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
+                        {busy ? "Saving…" : "Approve refund"}
+                      </button>
+                      <button type="button" disabled={busy} onClick={() => decideRefund("denied")} className="btn-secondary">
+                        Deny claim
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="text-sm font-medium text-emerald-800">
+                      Risk is under {Math.round(AUTO_REFUND_RISK_MAX * 100)}%, so the refund is automatic.
+                    </p>
+                  )}
+                </div>
+              </section>
+
+              <ClaimRiskPanel check={claimCheck} />
+
+              {liveDetail?.verdict?.reasons?.length > 0 && (
+                <section className="panel p-5">
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Why this result</h3>
+                  <ul className="mt-3 space-y-2 text-sm text-slate-700">
+                    {liveDetail.verdict.reasons.map((r, i) => (
+                      <li key={`${r.check}-${i}`} className="rounded-xl bg-slate-50 px-3 py-2">
+                        <span className="font-semibold capitalize">{r.check.replaceAll("_", " ")}:</span> {r.reason}
+                      </li>
+                    ))}
+                  </ul>
+                </section>
               )}
             </div>
+          ) : (
+            <div className="panel grid h-full place-items-center p-8 text-sm text-slate-500">Select a case to see the decision.</div>
           )}
         </div>
       </div>

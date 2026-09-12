@@ -125,6 +125,24 @@ class InferenceTests(unittest.TestCase):
         with patch.object(fault_model.estimator, "predict_proba", return_value=[[np.nan, 0, 0, 1]]):
             self.assertFalse(run_aggregator(payload_for()).model_used)
 
+    def test_high_claim_history_risk_goes_to_admin_review(self):
+        payload = payload_for()
+        history = next(c for c in payload.check_results if c.check_name.value == "claim_history")
+        history.flagged = True
+        history.details["risk_score"] = 0.62
+        verdict = run_aggregator(payload)
+        self.assertEqual(verdict.outcome.value, "SUPPORT_TICKET")
+        self.assertEqual(verdict.claim_assessment["risk_level"], "REVIEW")
+
+    def test_low_claim_history_risk_auto_refunds_supported_late_claim(self):
+        payload = payload_for()
+        history = next(c for c in payload.check_results if c.check_name.value == "claim_history")
+        history.flagged = False
+        history.details["risk_score"] = 0.18
+        verdict = run_aggregator(payload)
+        self.assertEqual(verdict.outcome.value, "AUTO_REFUND")
+        self.assertTrue(verdict.claim_assessment["auto_refund_eligible"])
+
     def test_check_confidences_do_not_control_model_confidence(self):
         payload = payload_for()
         first = run_aggregator(payload)
@@ -145,13 +163,13 @@ class InferenceTests(unittest.TestCase):
     def test_endpoint_infers_and_persisted_metadata_round_trips(self):
         sb = MagicMock()
         case = case_for()
-        with patch.object(cases, "build_case", return_value=case), patch.object(cases, "get_supabase", return_value=sb), patch("backend.app.checks.timing.predict_minutes", return_value=None), patch.object(fault_model.estimator, "predict", wraps=fault_model.estimator.predict) as predict:
+        with patch.object(cases, "build_case", return_value=case), patch.object(cases, "get_supabase", return_value=sb), patch("backend.app.workflows.get_supabase", return_value=sb), patch("backend.app.workflows.rows", return_value=[]), patch("backend.app.checks.timing.predict_minutes", return_value=None), patch.object(fault_model.estimator, "predict", wraps=fault_model.estimator.predict) as predict:
             response = cases.create_case(CreateCaseRequest(order_id="order-1"))
         predict.assert_called_once()
         self.assertTrue(response.verdict.model_used)
-        verdict_row = {**response.verdict.model_dump(mode="json"), "raw_llm_response": response.verdict.model_dump(mode="json")}
-        sb.table.return_value.select.return_value.eq.return_value.single.return_value.execute.side_effect = [MagicMock(data={"case_payload": case.model_dump(mode="json"), "status": "aggregated"}), MagicMock(data=verdict_row)]
-        sb.table.return_value.select.return_value.eq.return_value.execute.return_value.data = []
+        sb.table.return_value.select.return_value.eq.return_value.execute.return_value.data = [
+            {"id": case.case_id, "status": "resolved", "case_payload": case.model_dump(mode="json")}
+        ]
         with patch.object(cases, "get_supabase", return_value=sb):
             fetched = cases.get_case(case.case_id)
         self.assertEqual(fetched.verdict, response.verdict)
@@ -160,14 +178,14 @@ class InferenceTests(unittest.TestCase):
         from fastapi import HTTPException
         from postgrest.exceptions import APIError
         sb = MagicMock()
-        tables = {name: MagicMock() for name in ["complaints", "cases", "check_results", "verdicts"]}
+        tables = {name: MagicMock() for name in ["complaints", "cases", "check_results", "verdicts", "refund_history", "support_tickets"]}
         sb.table.side_effect = lambda name: tables[name]
-        tables["verdicts"].insert.return_value.execute.side_effect = APIError({"code": "23514", "message": "violates verdicts_fault_party_check", "details": "", "hint": ""})
-        with patch.object(cases, "build_case", return_value=case_for()), patch.object(cases, "get_supabase", return_value=sb), patch("backend.app.checks.timing.predict_minutes", return_value=None):
+        tables["verdicts"].upsert.return_value.execute.side_effect = APIError({"code": "23514", "message": "violates verdicts_fault_party_check", "details": "", "hint": ""})
+        with patch.object(cases, "build_case", return_value=case_for()), patch.object(cases, "get_supabase", return_value=sb), patch("backend.app.workflows.get_supabase", return_value=sb), patch("backend.app.workflows.rows", return_value=[]), patch("backend.app.checks.timing.predict_minutes", return_value=None):
             with self.assertRaises(HTTPException) as error:
                 cases.create_case(CreateCaseRequest(order_id="order-1"))
         self.assertEqual(error.exception.status_code, 503)
-        self.assertIn("migration", error.exception.detail)
+        self.assertIn("could not be fully saved", error.exception.detail)
         self.assertEqual(tables["cases"].insert.call_args.args[0]["status"], "open")
         tables["cases"].update.assert_not_called()
 

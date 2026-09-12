@@ -10,6 +10,7 @@ import uuid
 from collections import defaultdict
 from datetime import datetime, timezone
 
+from .config import get_settings
 from .db import get_supabase
 from .models import Case, CaseResponse, CheckResult, Outcome, Verdict
 
@@ -106,7 +107,13 @@ def persist_analysis(case, results, verdict):
     sb = get_supabase()
     history = next((r for r in results if r.check_name.value == "claim_history"), None)
     risk = float(history.details.get("risk_score", 0)) if history else None
-    review_required = history is None or history.flagged or (risk is not None and risk >= 0.5) or bool(case.workflow.get("account_manual_review"))
+    risk_threshold = get_settings().claim_history_auto_refund_threshold
+    review_required = (
+        history is None
+        or history.flagged
+        or (risk is not None and risk >= risk_threshold)
+        or bool(case.workflow.get("account_manual_review"))
+    )
     case.workflow["fraud_screening"] = dict(
         status="review_required" if review_required else "low_risk",
         risk_score=risk, source=history.details.get("source", "unknown") if history else "unavailable",

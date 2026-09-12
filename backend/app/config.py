@@ -43,6 +43,10 @@ class Settings(BaseSettings):
 
     support_review_confidence_threshold: float = 0.55
 
+    # Claim-history AI risk below this is auto-refunded; at/above it needs admin review.
+    # 0.40 (40%) is the demo policy: safer than 20% (too few autos) and below the 55% flag line.
+    claim_history_auto_refund_threshold: float = 0.40
+
     # Legacy aggregator setting retained for compatibility
     aggregator_confidence_threshold: float = 0.6
 

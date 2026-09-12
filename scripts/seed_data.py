@@ -41,7 +41,7 @@ Faker.seed(7)
 
 MERCHANTS_PER_ZONE = 5
 RIDERS_TOTAL = 10
-CUSTOMERS_TOTAL = 30
+CUSTOMERS_TOTAL = 36
 HISTORICAL_ORDERS = 30
 TONIGHT_ORDERS_ZONE_B = 10  # the "rain delay" cluster
 TONIGHT_ORDERS_OTHER = 10
@@ -134,11 +134,11 @@ def seed_refund_history(sb, customers: list[dict]) -> dict[str, list[dict]]:
     shuffled = customers[:]
     random.shuffle(shuffled)
 
-    low = shuffled[:10]
-    low_mid = shuffled[10:16]
-    mid = shuffled[16:22]
-    high_mid = shuffled[22:26]
-    high = shuffled[26:]
+    low = shuffled[:8]
+    low_mid = shuffled[8:16]
+    mid = shuffled[16:24]
+    high_mid = shuffled[24:30]
+    high = shuffled[30:]
 
     def add_claim(customer: dict, reason: str, outcome: str, amount: float, days_ago: int) -> None:
         entries.append(
@@ -154,7 +154,8 @@ def seed_refund_history(sb, customers: list[dict]) -> dict[str, list[dict]]:
         )
 
     for customer in low:
-        n = random.choice([0, 0, 1])
+        # Always at least one modest claim so the UI is not a wall of 0% scores.
+        n = random.choice([1, 1, 2])
         for _ in range(n):
             add_claim(
                 customer,
@@ -163,6 +164,7 @@ def seed_refund_history(sb, customers: list[dict]) -> dict[str, list[dict]]:
                 random.uniform(150, 450),
                 random.randint(20, 80),
             )
+        print(f"  -> low-risk claims for {customer['name']} ({customer['id']})")
 
     for customer in low_mid:
         for _ in range(random.randint(1, 2)):
