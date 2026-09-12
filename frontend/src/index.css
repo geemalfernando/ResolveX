@@ -2,38 +2,110 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  color-scheme: light;
+  --rx-ink: #0f172a;
+  --rx-muted: #64748b;
+  --rx-border: rgba(148, 163, 184, 0.22);
+  --rx-panel: rgba(255, 255, 255, 0.88);
+}
+
 html,
 body,
 #root {
-  height: 100%;
+  min-height: 100%;
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 body {
   @apply bg-slate-50 font-sans text-slate-900 antialiased;
+  background-image:
+    radial-gradient(circle at top left, rgba(45, 212, 191, 0.08), transparent 24rem),
+    radial-gradient(circle at top right, rgba(251, 191, 36, 0.06), transparent 20rem),
+    linear-gradient(180deg, #fbfcfd 0%, #f8fafc 35%, #f1f5f9 100%);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+::selection {
+  background: rgba(45, 212, 191, 0.25);
+  color: #0f172a;
+}
+
+button,
+a,
+input,
+textarea,
+select {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  @apply outline-none ring-2 ring-teal-400/60 ring-offset-2 ring-offset-white;
+}
+
+.app-surface {
+  position: relative;
+  isolation: isolate;
+}
+
+.app-surface::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    linear-gradient(rgba(255,255,255,0.35), rgba(255,255,255,0.35)),
+    radial-gradient(circle at 10% 15%, rgba(20,184,166,0.09), transparent 20rem),
+    radial-gradient(circle at 92% 9%, rgba(245,158,11,0.07), transparent 18rem);
 }
 
 .field {
-  @apply block w-full mt-1 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm shadow-sm outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-100;
+  @apply mt-1 block w-full rounded-2xl border border-slate-200/90 bg-white/95 px-3.5 py-3 text-sm text-slate-900 shadow-sm outline-none transition duration-200 placeholder:text-slate-400 hover:border-slate-300 focus:border-teal-500 focus:ring-4 focus:ring-teal-100/80;
+}
+
+.field:disabled {
+  @apply cursor-not-allowed bg-slate-100 text-slate-400;
 }
 
 .btn {
-  @apply inline-flex items-center justify-center rounded-xl bg-slate-900 px-3.5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 disabled:opacity-50;
+  @apply inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_10px_30px_-14px_rgba(15,23,42,0.8)] transition duration-200 hover:-translate-y-0.5 hover:bg-slate-800 hover:shadow-lg active:translate-y-0 disabled:pointer-events-none disabled:opacity-50;
 }
 
-.qty-btn {
-  appearance: none;
-  -webkit-appearance: none;
-  padding: 0;
-  margin: 0;
-  @apply h-8 w-8 shrink-0 rounded-full border border-slate-200 bg-white text-center text-base leading-8 text-slate-900;
+.btn-secondary {
+  @apply inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200/90 bg-white/90 px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm backdrop-blur transition duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:bg-white hover:text-slate-950 hover:shadow-md active:translate-y-0 disabled:pointer-events-none disabled:opacity-50;
 }
 
+.btn-danger {
+  @apply inline-flex items-center justify-center rounded-2xl bg-rose-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-rose-700 disabled:opacity-50;
+}
+
+.qty-btn,
 .qty-btn-dark {
   appearance: none;
   -webkit-appearance: none;
   padding: 0;
   margin: 0;
-  @apply h-8 w-8 shrink-0 rounded-full bg-slate-950 text-center text-base leading-8 text-white;
+  @apply h-8 w-8 shrink-0 rounded-full text-center text-base leading-8 transition active:scale-95;
+}
+
+.qty-btn {
+  @apply border border-slate-200 bg-white text-slate-900 hover:border-slate-300 hover:bg-slate-50;
+}
+
+.qty-btn-dark {
+  @apply bg-slate-950 text-white shadow-sm hover:bg-slate-800;
 }
 
 .scroll-pane {
@@ -42,14 +114,83 @@ body {
   overscroll-behavior: contain;
 }
 
-.btn-secondary {
-  @apply inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-50;
-}
-
 .page-shell {
-  @apply mx-auto w-full max-w-7xl px-4 py-5 sm:px-6;
+  @apply mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:py-8;
 }
 
 .panel {
-  @apply rounded-2xl border border-slate-200/80 bg-white shadow-sm;
+  @apply rounded-[1.5rem] border border-slate-200/70 bg-white/90 shadow-[0_18px_50px_-32px_rgba(15,23,42,0.55)] backdrop-blur-xl;
+}
+
+.panel:hover {
+  border-color: rgba(148, 163, 184, 0.38);
+}
+
+.glass-card {
+  @apply rounded-[1.5rem] border border-white/60 bg-white/70 shadow-[0_24px_80px_-45px_rgba(15,23,42,0.6)] backdrop-blur-xl;
+}
+
+.kicker {
+  @apply text-[11px] font-bold uppercase tracking-[0.22em] text-teal-700;
+}
+
+.page-title {
+  @apply text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl;
+}
+
+.page-subtitle {
+  @apply mt-1 max-w-2xl text-sm leading-relaxed text-slate-500;
+}
+
+.metric-card {
+  @apply rounded-2xl border border-slate-200/70 bg-white/85 p-4 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md;
+}
+
+.status-pill {
+  @apply inline-flex items-center rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-600;
+}
+
+table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+thead th {
+  @apply bg-slate-50/90 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500;
+}
+
+tbody tr {
+  @apply transition-colors;
+}
+
+tbody tr:hover {
+  background: rgba(248, 250, 252, 0.8);
+}
+
+main h1,
+main h2,
+main h3 {
+  text-wrap: balance;
+}
+
+main p {
+  text-wrap: pretty;
+}
+
+@keyframes rx-fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes rx-pulse-soft {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(45,212,191,0.18); }
+  50% { box-shadow: 0 0 0 10px rgba(45,212,191,0); }
+}
+
+.animate-fade-up {
+  animation: rx-fade-up .35s ease-out both;
+}
+
+.animate-pulse-soft {
+  animation: rx-pulse-soft 2.4s ease-in-out infinite;
 }
