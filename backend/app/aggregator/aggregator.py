@@ -6,6 +6,8 @@ verdict. `_local_decision_engine` covers the demo outcomes on its own.
 
 from __future__ import annotations
 
+import logging
+
 from ..config import get_settings
 from ..models import (
     AggregatorInput,
