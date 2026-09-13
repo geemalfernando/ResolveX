@@ -73,15 +73,16 @@ def main():
  now=datetime.now(timezone.utc);manifest=[]
  for i,(key,label,complaint,ready,pickup,drop) in enumerate(SCENARIOS):
   zone='DEMO_V2_COLOMBO_'+key.upper()
-  mid=next(iter(linked_merchants)) if i==0 and linked_merchants else uid(key+'/merchant')
+  # The merchant behind the partner login keeps its own restaurant and zone; a
+  # scenario zone has no riders with a login, so orders placed there cannot be delivered.
+  mid=uid(key+'/merchant')
   cid=next(iter(linked_customers)) if i==0 and linked_customers else uid(key+'/customer')
   rid=uid(key+'/rider');oid=uid(key+'/order')
-  if mid not in linked_merchants: sb.table('merchants').insert(dict(id=mid,name=['Cinnamon Kitchen','Bambalapitiya Rice & Curry','Wellawatte Family Meals'][i%3]+' · '+label,zone_id=zone,address='Colombo demo restaurant',lat=6.9,lng=79.8,avg_prep_minutes=15)).execute()
+  sb.table('merchants').insert(dict(id=mid,name=['Cinnamon Kitchen','Bambalapitiya Rice & Curry','Wellawatte Family Meals'][i%3]+' · '+label,zone_id=zone,address='Colombo demo restaurant',lat=6.9,lng=79.8,avg_prep_minutes=15)).execute()
   if cid not in linked_customers: sb.table('customers').insert(dict(id=cid,name=['Amaya','Nimal','Dilini','Kavindu','Ishara','Sachini','Ravindu'][i%7]+' · '+label,email=f'{key}@demo.resolvex.invalid',phone='0000000000',address=f'{12+i} Demo Lane, Colombo',zone_id=zone,lat=6.91,lng=79.81)).execute()
   sb.table('riders').insert(dict(id=rid,name=['Kasun','Tharindu','Malith','Dinesh'][i%4]+' · Demo',phone='0000000000',vehicle='bike',zone_id=zone)).execute()
   if i == 0:
    sb.table('customers').update(dict(lat=6.91,lng=79.81,zone_id=zone)).eq('id',cid).execute()
-   sb.table('merchants').update(dict(lat=6.9,lng=79.8,zone_id=zone)).eq('id',mid).execute()
   # Keep the authenticated identity while replacing its seeded delivery geography.
   customer=sb.table('customers').select('*').eq('id',cid).single().execute().data
   merchant=sb.table('merchants').select('*').eq('id',mid).single().execute().data

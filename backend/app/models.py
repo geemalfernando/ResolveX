@@ -122,11 +122,36 @@ class ComplaintSnapshot(BaseModel):
     photo_url: Optional[str] = None
 
 
+class DeliveryEvidence(BaseModel):
+    packing_path: Optional[str] = None
+    handover_path: Optional[str] = None
+    claim_path: Optional[str] = None
+    packing_url: Optional[str] = None
+    handover_url: Optional[str] = None
+    claim_url: Optional[str] = None
+
+
 class ZoneSnapshot(BaseModel):
     zone_id: str
     open_orders_count: int
     average_delay_minutes: Optional[float] = Field(default=None, ge=0)
     late_orders_count: int
+
+
+class PaymentSnapshot(BaseModel):
+    gateway: str = "ResolveX Pay"
+    payment_id: Optional[str] = None
+    charge_id: Optional[str] = None
+    status: str = "captured"
+    amount: float = 0
+    currency: str = "LKR"
+    brand: Optional[str] = None
+    last4: Optional[str] = None
+    holder: Optional[str] = None
+    account: Optional[str] = None
+    method: str = "card"
+    captured_at: Optional[str] = None
+    mocked: bool = True
 
 
 class Case(BaseModel):
@@ -139,7 +164,9 @@ class Case(BaseModel):
     customer: CustomerSnapshot
     customer_refund_history: list[RefundHistoryEntry] = Field(default_factory=list)
     complaint: Optional[ComplaintSnapshot] = None
+    evidence: DeliveryEvidence = Field(default_factory=DeliveryEvidence)
     zone_snapshot: ZoneSnapshot
+    payment: Optional[PaymentSnapshot] = None
     workflow: dict[str, Any] = Field(default_factory=dict)
 
 

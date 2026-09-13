@@ -25,6 +25,9 @@ const FLOW = [
   ["04", "Resolve", "Claims combine timing, route, zone, photo, and history signals."],
 ];
 
+// Short lists are easier to browse than to search.
+const BROWSABLE_MERCHANTS = 12;
+
 const TRUST = [
   ["⚡", "Proactive delay detection", "ResolveX can flag late orders before a customer needs to complain."],
   ["📍", "Route evidence", "GPS points help explain detours, long stops, and final drop-off accuracy."],
@@ -41,7 +44,6 @@ export default function Storefront() {
   const [busy, setBusy] = useState(false);
   const [category, setCategory] = useState("all");
   const [query, setQuery] = useState("");
-  const [zone, setZone] = useState("all");
   const [pickerOpen, setPickerOpen] = useState(false);
   const [basket, setBasket] = useState(() => {
     try {
@@ -69,19 +71,16 @@ export default function Storefront() {
   const products = catalog?.products ?? [];
   const merchants = catalog?.merchants ?? [];
   const selectedMerchant = merchants.find((m) => m.id === basket.merchant);
-  const zones = useMemo(() => {
-    const ids = Array.from(new Set(merchants.map((m) => m.zone_id).filter(Boolean))).sort();
-    return ["all", ...ids];
-  }, [merchants]);
+  const searchRequired = merchants.length > BROWSABLE_MERCHANTS;
   const filteredMerchants = useMemo(() => {
     const q = query.trim().toLowerCase();
+    if (!q) return searchRequired ? [] : merchants;
+    if (q.length < 2) return [];
     return merchants.filter((m) => {
-      if (zone !== "all" && m.zone_id !== zone) return false;
-      if (!q) return true;
       const { title, note } = merchantParts(m.name);
-      return `${title} ${note} ${m.zone_id ?? ""}`.toLowerCase().includes(q);
+      return `${title} ${note} ${m.address ?? ""}`.toLowerCase().includes(q);
     });
-  }, [merchants, query, zone]);
+  }, [merchants, query, searchRequired]);
   const showPicker = pickerOpen || !selectedMerchant;
   const categories = useMemo(() => ["all", ...Array.from(new Set(products.map((p) => p.category)))], [products]);
   const visible = products.filter((p) => category === "all" || p.category === category);
@@ -146,7 +145,7 @@ export default function Storefront() {
         instructions,
       });
       setBasket({ merchant: basket.merchant, items: {} });
-      navigate("/my-orders");
+      navigate(`/pay/${id}`);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -278,25 +277,20 @@ export default function Storefront() {
 
               {showPicker && (
                 <div className="mt-4">
-                  <input className="field" type="search" placeholder="Search restaurant or zone" value={query} onChange={(e) => setQuery(e.target.value)} />
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {zones.map((z) => (
-                      <button key={z} type="button" onClick={() => setZone(z)} className={`rounded-full px-3 py-1.5 text-xs font-bold transition ${zone === z ? "bg-slate-950 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>
-                        {z === "all" ? "All zones" : z}
-                      </button>
-                    ))}
-                  </div>
+                  {searchRequired && <input className="field" type="search" placeholder="Search by restaurant name" value={query} onChange={(e) => setQuery(e.target.value)} autoComplete="off" />}
                   <div className="scroll-pane mt-3 grid max-h-64 gap-2 sm:grid-cols-2">
                     {filteredMerchants.map((m) => {
                       const active = basket.merchant === m.id;
                       return (
                         <button key={m.id} type="button" onClick={() => pickMerchant(m.id)} className={`rounded-2xl border p-3 text-left transition ${active ? "border-slate-950 bg-slate-950 text-white" : "border-slate-200 bg-white hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-sm"}`}>
                           <p className="font-bold">{merchantParts(m.name).title}</p>
-                          <p className={`mt-1 text-xs ${active ? "text-slate-300" : "text-slate-500"}`}>{m.avg_prep_minutes} min prep{m.zone_id ? ` · ${m.zone_id}` : ""}</p>
+                          <p className={`mt-1 text-xs ${active ? "text-slate-300" : "text-slate-500"}`}>{merchantParts(m.name).note || m.address || `${m.avg_prep_minutes} min prep`}</p>
                         </button>
                       );
                     })}
-                    {catalog && !filteredMerchants.length && <p className="col-span-full py-6 text-center text-sm text-slate-500">No restaurants match your search.</p>}
+                    {searchRequired && query.trim().length < 2 && <p className="col-span-full py-6 text-center text-sm text-slate-500">Type at least 2 letters to see matching restaurants.</p>}
+                    {query.trim().length >= 2 && catalog && !filteredMerchants.length && <p className="col-span-full py-6 text-center text-sm text-slate-500">No restaurants match that search.</p>}
+                    {!searchRequired && catalog && !merchants.length && <p className="col-span-full py-6 text-center text-sm text-slate-500">No restaurants are accepting orders yet.</p>}
                   </div>
                 </div>
               )}
@@ -382,7 +376,11 @@ export default function Storefront() {
                     <label className="text-xs font-semibold text-slate-600">Longitude<input required type="number" min="-180" max="180" step="any" className="field" value={lng} onChange={(e) => setLng(e.target.value)} /></label>
                   </div>
                   <label className="block text-sm font-semibold text-slate-700">Instructions<input className="field" value={instructions} onChange={(e) => setInstructions(e.target.value)} placeholder="Gate, floor, landmark…" /></label>
-                  <button className="btn w-full py-3" disabled={busy}>{busy ? "Placing order…" : user ? "Place order →" : "Sign in to order"}</button>
+                  {user ? (
+                    <button className="btn w-full py-3" disabled={busy}>{busy ? "Placing order…" : "Place order →"}</button>
+                  ) : (
+                    <button type="button" className="btn w-full py-3" onClick={() => navigate("/login", { state: { from: "/" } })}>Sign in to order</button>
+                  )}
                 </form>
               )}
             </div>

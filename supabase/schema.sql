@@ -93,6 +93,22 @@ create table if not exists public.complaints (
   created_at timestamptz not null default now()
 );
 
+-- Private packing / handover / claim photos. Frontend never writes here directly.
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('delivery-evidence', 'delivery-evidence', false, 10485760, array['image/jpeg', 'image/png', 'image/webp'])
+on conflict (id) do update set public = false;
+
+create table if not exists public.delivery_evidence (
+  id uuid primary key default gen_random_uuid(),
+  order_id uuid not null references public.orders(id) on delete cascade,
+  kind text not null check (kind in ('packing', 'handover', 'claim')),
+  storage_path text not null,
+  content_type text not null,
+  uploaded_by uuid,
+  created_at timestamptz not null default now(),
+  unique (order_id, kind)
+);
+
 create table if not exists public.cases (
   id uuid primary key default gen_random_uuid(),
   order_id uuid not null references public.orders(id),
@@ -106,6 +122,21 @@ create table if not exists public.cases (
 
 create index if not exists cases_order_id_idx on public.cases(order_id);
 create index if not exists cases_status_idx on public.cases(status);
+
+create table if not exists public.photo_comparisons (
+  id uuid primary key default gen_random_uuid(),
+  order_id uuid not null unique references public.orders(id) on delete cascade,
+  case_id uuid references public.cases(id) on delete set null,
+  packing_path text,
+  handover_path text,
+  claim_path text,
+  fault_party text not null check (fault_party in ('MERCHANT', 'RIDER', 'NEITHER', 'INCONCLUSIVE')),
+  confidence numeric not null check (confidence >= 0 and confidence <= 1),
+  reasons jsonb not null default '[]'::jsonb,
+  details jsonb not null default '{}'::jsonb,
+  source text not null default 'gemini',
+  created_at timestamptz not null default now()
+);
 
 create table if not exists public.check_results (
   id uuid primary key default gen_random_uuid(),

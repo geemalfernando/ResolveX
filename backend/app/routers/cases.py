@@ -4,15 +4,12 @@ full pipeline: Case Builder -> 5 checks -> Fairness Aggregator -> persisted verd
 GET /cases/{id} — fetch a previously built case with its checks and verdict.
 """
 
-from __future__ import annotations
-
-import uuid
-
-from fastapi import APIRouter, File, HTTPException, UploadFile, Depends
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile, Depends
 from postgrest.exceptions import APIError
 
 from ..auth import AuthPrincipal, current_user, require_roles
 from .commerce import find_order, authorize_order
+from ..evidence import save_upload
 from .. import checks
 from ..aggregator.aggregator import run_aggregator
 from ..case_builder import build_case
@@ -21,36 +18,22 @@ from ..models import (
     AggregatorInput,
     CaseResponse,
     CreateCaseRequest,
-    Outcome,
 )
 
 router = APIRouter(prefix="/cases", tags=["cases"])
 
 
 @router.post("/upload-photo")
-def upload_photo(file: UploadFile = File(...), principal: AuthPrincipal = Depends(require_roles("customer", "support", "admin"))) -> dict[str, str]:
-    allowed_types = {"image/jpeg", "image/png", "image/webp"}
-    if file.content_type not in allowed_types:
-        raise HTTPException(status_code=400, detail="Only JPEG, PNG, and WebP images are supported")
-
-    contents = file.file.read()
-    if len(contents) > 10 * 1024 * 1024:
-        raise HTTPException(status_code=413, detail="Photo must be 10 MB or smaller")
-
-    extension = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}[file.content_type]
-    path = f"{uuid.uuid4()}.{extension}"
-    try:
-        sb = get_supabase()
-        sb.storage.from_("complaint-photos").upload(
-            path,
-            contents,
-            {"content-type": file.content_type, "upsert": "false"},
-        )
-        public_url = sb.storage.from_("complaint-photos").get_public_url(path)
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Photo upload failed: {exc}") from exc
-
-    return {"photo_url": public_url}
+def upload_photo(
+    file: UploadFile = File(...),
+    order_id: str | None = Form(default=None),
+    principal: AuthPrincipal = Depends(require_roles("customer", "support", "admin")),
+) -> dict[str, str]:
+    if not order_id:
+        raise HTTPException(status_code=422, detail="Order ID is required so the claim photo can be stored with packing and handover evidence")
+    authorize_order(find_order(order_id), principal)
+    saved = save_upload(order_id, "claim", file, uploaded_by=principal.user_id)
+    return {"photo_url": saved["path"], "path": saved["path"], "signed_url": saved.get("signed_url")}
 
 
 @router.post("", response_model=CaseResponse)
@@ -121,4 +104,15 @@ def get_case(case_id: str) -> CaseResponse:
                 raw["fault_party"] = "neither"
                 raw["fault_prediction"] = "NEITHER"
             verdict = Verdict.model_validate(raw)
+    try:
+        from ..evidence import evidence_payload
+        photos = evidence_payload(case.order.id)
+        case.evidence.packing_path = (photos.get("packing") or {}).get("path") or case.evidence.packing_path
+        case.evidence.handover_path = (photos.get("handover") or {}).get("path") or case.evidence.handover_path
+        case.evidence.claim_path = (photos.get("claim") or {}).get("path") or case.evidence.claim_path
+        case.evidence.packing_url = (photos.get("packing") or {}).get("signed_url")
+        case.evidence.handover_url = (photos.get("handover") or {}).get("signed_url")
+        case.evidence.claim_url = (photos.get("claim") or {}).get("signed_url")
+    except Exception:
+        pass
     return CaseResponse(case_id=case_id, status=row["status"], case=case, check_results=results, verdict=verdict)

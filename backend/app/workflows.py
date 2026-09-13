@@ -1,7 +1,8 @@
 """Persist product workflows in the existing cases.case_payload JSONB column.
 
 No schema/admin privileges are needed. This is a single-process demo workflow,
-with per-case locking and deterministic refund IDs. Payment processing is mocked.
+with per-case locking and deterministic refund IDs. Charges and refunds go
+through the ResolveX Pay demo gateway, back to the card used at checkout.
 """
 from __future__ import annotations
 
@@ -13,6 +14,7 @@ from datetime import datetime, timezone
 from .config import get_settings
 from .db import get_supabase
 from .models import Case, CaseResponse, CheckResult, Outcome, Verdict
+from .payments import refund_to_source
 
 LOCK = threading.RLock()
 OPEN = ["placed", "preparing", "ready", "picked_up"]
@@ -61,19 +63,47 @@ def refund(case):
     if case.workflow.get("refund", {}).get("status") == "completed":
         return case.workflow["refund"]
     refund_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"resolvex/refund/order/{case.order.id}"))
+    payment = case.payment.model_dump() if case.payment else None
     existing = [r for r in rows("refund_history", order_id=case.order.id) if r["outcome"] == "approved"]
     if existing:
         saved = existing[0]
-        record = dict(reference="RFD-" + saved["id"][:8].upper(), amount=float(saved["amount"]), currency="LKR", status="completed", processed_at=saved.get("created_at"), mocked=True)
+        payout = refund_to_source(payment, float(saved["amount"]))
+        record = dict(
+            reference="RFD-" + saved["id"][:8].upper(),
+            amount=float(saved["amount"]),
+            currency="LKR",
+            status="completed",
+            processed_at=saved.get("created_at"),
+            mocked=True,
+            gateway=payout["gateway"],
+            destination=payout["destination"],
+            account=payout["account"],
+            last4=payout.get("last4"),
+            brand=payout.get("brand"),
+        )
         case.workflow["refund"] = record
-        event(case, "Existing order refund reused; no second refund issued")
+        event(case, f"Existing order refund reused; no second refund issued to {payout['destination']}")
         return record
     amount = round(sum(item.qty * item.price for item in case.order.items), 2)
-    record = dict(reference="RFD-" + refund_id[:8].upper(), amount=amount, currency="LKR", status="completed", processed_at=now(), mocked=True)
+    payout = refund_to_source(payment, amount)
+    record = dict(
+        reference="RFD-" + refund_id[:8].upper(),
+        amount=amount,
+        currency="LKR",
+        status="completed",
+        processed_at=now(),
+        mocked=True,
+        gateway=payout["gateway"],
+        destination=payout["destination"],
+        account=payout["account"],
+        last4=payout.get("last4"),
+        brand=payout.get("brand"),
+        payment_id=payout.get("payment_id"),
+    )
     reason = case.complaint.type.value if case.complaint and case.complaint.type.value in ("late", "wrong_item", "damaged", "missing_item") else "other"
     get_supabase().table("refund_history").upsert(dict(id=refund_id, customer_id=case.customer.id, order_id=case.order.id, reason=reason, amount=amount, outcome="approved"), on_conflict="id").execute()
     case.workflow["refund"] = record
-    event(case, "Demo refund completed")
+    event(case, f"Demo refund completed to {payout['destination']}")
     return record
 
 
